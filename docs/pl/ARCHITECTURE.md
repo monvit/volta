@@ -17,7 +17,7 @@ W zakresie projektu mieści się zaprojektowanie i implementacja następujących
   - [Zdalny](#model-zdalny)
 - Wysokowydajny transport danych między agentem a serwerem, zoptymalizowany pod kątem niskiego narzutu i oszczędności energii **gRPC**.
 - Wizualizacja w czasie rzeczywistym **WebSockets**.
-- Wsparcie dla platform Linux.
+- Pierwotnie narzędzie dedykowane na system `GNU Linux`
 - Konfigurowalność agenta, w tym:
   - Wybór monitorowanych metryk.
   - Definiowalna częstotliwość próbkowania metryk.
@@ -29,6 +29,7 @@ Platformy: Główny cel to Linux; drugi cel to Windows.
 
 Na tym etapie projekt nie jest:
 
+- Wieloplatformowy<CHECK>, **brak wsparcia dla systemów Windows**.
 - Systemem do zbierania i analizy logów tekstowych.
 - Systemem do alertowania w postaci powiadomień.
 - Narzędziem do tracingu.
@@ -39,11 +40,13 @@ Zaawansowanym systemem alertowania (jak Prometheus Alertmanager).
 
 Architektura opiera się na klasycznym modelu Agent -> Serwer. 
 
-Jeden **Serwer Centralny** działa jako punkt agregacji, odbierając dane od wielu Agentów (0..n). Agent przesyła zebrane dane wyłącznie do jednego skonfigurowanego serwera.
+Jeden **Serwer Centralny** działa jako punkt agregacji, odbierając dane od wielu Agentów (0..n). Agent przesyła zebrane dane wyłącznie do jednego skonfigurowanego serwera. Każdy z **Agentów** reprezentuje osobną maszynę, na której jest uruchomiony. 
+
 
 Dashboard łączy się wyłącznie z **Serwerem Centralnym**, który udostępnia mu zarówno zagregowane dane historyczne, jak i strumień "na żywo" od wybranych agentów.
 
 ![volta](../images/high_level_architecture.png "Architektura wysokopoziomowa")
+
 ## Modele Wdrożeniowe
 
 ### Model Lokalny
@@ -67,7 +70,7 @@ Docelowa architektura dla środowisk serwerowych.
 
 Główny komponent zbierający dane, napisany w C++ dla zapewnienia maksymalnej wydajności i minimalnego narzutu na monitorowany system. Działa jako usługa systemowa w przestrzeni użytkownika na hoście.
 
-Jego zadaniem jest cykliczne odpytywanie niskopoziomowych API sprzętowych (jak NVML, oneAPI, RAPL) oraz systemowych (jak `/proc`) o metryki zdefiniowane w [METRICS.md](%20METRICS.md). Zebrane dane są następnie wysyłane do serwera centralnego przez trwałe energooszczędne strumieniowanie **gRPC**.
+Jego zadaniem jest cykliczne odpytywanie niskopoziomowych API sprzętowych (jak NVML, oneAPI, RAPL) oraz systemowych (jak `/proc`) o metryki zdefiniowane w [METRICS.md](METRICS.md). Zebrane dane są następnie wysyłane do serwera centralnego przez trwałe energooszczędne strumieniowanie **gRPC**.
 
 ### Serwer
 
@@ -77,4 +80,10 @@ W trybie zdalnym zapisuje dane w bazie danych i dodatkowo sam aktywnie monitoruj
 
 ### Baza Danych
 
+todo: zdefiniowanie zakresu, żywotności, archiwizacji
+
 ### Dashboard
+
+Punkt dostępu użytkownika do wizualizacji danych. Uruchamiany na serwerze centralnym w ramach konteneru, wystawia dane historyczne oraz strumień "na żywo".
+
+Wersja pierwotna systemu ma wystawiać Dashboard zależnie od konfiguracji publicznie lub wyłącznie wewnątrz sieci pod zdefniowanym portem i ścieżką.

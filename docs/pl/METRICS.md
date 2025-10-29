@@ -8,11 +8,15 @@
 4. Średnie zużycie (całkowite + per rdzeń)
 5. Temp (całkowita + per rdzeń)
 6. Aktywne Procesy
-7. ? Cache hit/miss
+7. TODO: przykładowo Cache HIT/MISS, jakie znaczenie dla administratorów przykładowo klastrów?
 
 ### Intel
 
+TODO: zdefiniowanie używanego narzędzia/sposobu do pozyskania
+
 ### AMD
+
+TODO: zdefiniowanie używanego narzędzia/sposobu do pozyskania
 
 ## Metryki GPU
 
@@ -25,14 +29,20 @@
 
 ### NVIDIA
 
+TODO: zdefiniowanie używanego narzędzia/sposobu do pozyskania
+
 ### AMD
 
+TODO: zdefiniowanie używanego narzędzia/sposobu do pozyskania
+
 ### Intel
+
+TODO: zdefiniowanie używanego narzędzia/sposobu do pozyskania
 
 ## Metryki RAM ?
 
 1. Zajętość pamięci
-2. Zajętość na cache
+2. Zajętość przeznaczona na cache
 3. ?
 
 ## Metryki Dysków
@@ -45,5 +55,3 @@
 
 1. Wejścia
 2. Wyjścia
-
-## Metryki Mocy
