@@ -23,24 +23,22 @@ W zakresie projektu mieści się zaprojektowanie i implementacja następujących
   - Definiowalna częstotliwość próbkowania metryk.
   - Wybór rdzenia, na którym uruchamiany agent. 
 
-Platformy: Główny cel to Linux; drugi cel to Windows.
-
 ### Poza zakresem
 
 Na tym etapie projekt nie jest:
 
-- Wieloplatformowy<CHECK>, **brak wsparcia dla systemów Windows**.
+- Wieloplatformowy, **brak wsparcia dla systemów Windows**.
 - Systemem do zbierania i analizy logów tekstowych.
 - Systemem do alertowania w postaci powiadomień.
 - Narzędziem do tracingu.
-
-Zaawansowanym systemem alertowania (jak Prometheus Alertmanager).
+- Archiwizacja danych.
+- Zaawansowanym systemem alertowania (jak Prometheus Alertmanager).
 
 ## Architektura Wysokopoziomowa
 
 Architektura opiera się na klasycznym modelu Agent -> Serwer. 
 
-Jeden **Serwer Centralny** działa jako punkt agregacji, odbierając dane od wielu Agentów (0..n). Agent przesyła zebrane dane wyłącznie do jednego skonfigurowanego serwera. Każdy z **Agentów** reprezentuje osobną maszynę, na której jest uruchomiony. 
+Jeden **Serwer Centralny** działa jako punkt agregacji, odbierając dane od wielu Agentów (1..n). Agent przesyła zebrane dane wyłącznie do jednego skonfigurowanego serwera. Każdy z **Agentów** reprezentuje osobną maszynę, na której jest uruchomiony. 
 
 
 Dashboard łączy się wyłącznie z **Serwerem Centralnym**, który udostępnia mu zarówno zagregowane dane historyczne, jak i strumień "na żywo" od wybranych agentów.
@@ -55,14 +53,14 @@ Przeznaczony do rozwoju, testów lub monitorowania pojedynczej maszyny.
 
 - Wszystkie komponenty działają na tej samej maszynie (`localhost`).
 - Agent wysyła dane poprzez **gRPC** na lokalny port.
-- Serwer uruchamiany jest w "trybie lekkim" (TODO)
+- Serwer uruchamiany jest w "trybie lekkim" **bez połączenia z bazą danych**. Działa wyłącznie jako przekaźnik, odbierając dane gRPC od Agenta i natychmiast rozgłaszając je przez WebSockets do podłączonych klientów.
 
 ### Model Zdalny
 
 Docelowa architektura dla środowisk serwerowych.
 
 - Agent jest instalowany jako natywna usługa systemowa na każdej monitorowanej maszynie. 
-- Platforma Centralna (Serwer, Baza Danych, Dashboard) jest uruchamiana na dedykowanym serwerze zarządzającym, jako zestaw kontenerów.
+- Platforma Centralna jest uruchamiana na dedykowanym serwerze zarządzającym, jako zestaw kontenerów.
 
 ## Komponenty
 
@@ -76,11 +74,22 @@ Jego zadaniem jest cykliczne odpytywanie niskopoziomowych API sprzętowych (jak 
 
 Centralny punkt do zbierania i agregacji danych całej platformy. Jest odpowiedzialny za odbieranie strumieni danych od wszystkich podłączonych agentów.
 
-W trybie zdalnym zapisuje dane w bazie danych i dodatkowo sam aktywnie monitoruje hosty (odpytując ich **BMC** o całkowity pobór mocy). Wystawia też dwa rodzaje API dla dashboardu: **WebSockets** (do rozgłaszania danych na żywo) oraz **REST / gRPIC-Web** (do odpytywania o dane historyczne).
+W trybie zdalnym zapisuje dane w bazie danych i dodatkowo sam aktywnie monitoruje hosty (odpytując ich **BMC** o całkowity pobór mocy). Wystawia też dwa rodzaje API dla dashboardu: **WebSockets** (do rozgłaszania danych na żywo) oraz **REST / gRPC-Web** (do odpytywania o dane historyczne).
 
 ### Baza Danych
 
-todo: zdefiniowanie zakresu, żywotności, archiwizacji
+Komponent odpowiedzialny za trwałe przechowywanie metryk, wykorzystywany wyłącznie w trybie zdalnym.
+
+#### Zakres 
+Rolą bazy danych jest wyłącznie przechowywanie i udostępnianie **metryk szeregów czasowych (time-series)**. Musi być zoptymalizowana pod kątem bardzo szybkiego zapisu (wysoki ingest rate od wielu agentów) oraz szybkich zapytań analitycznych (agregacje, filtrowanie po czasie) dla dashboardu. Rekomendowaną technologią jest dedykowana baza szeregów czasowych, typu  **TimescaleDB** lub **InfluxDB**.
+
+#### Żywotność
+
+W celu zarządzania przestrzenią dyskową, system będzie wspierał politykę retencji. Na potrzeby projektu, **dane starsze niż 30 dni będą automatycznie i trwale usuwane**.
+
+#### Archiwizacja
+
+Zaawansowana archiwizacja (np. przenoszenie danych starszych niż 30 dni do wolniejszego, tańszego magazynu) jest **poza zakresem** dla tej iteracji projektu. System skupia się na retencji, a nie na archiwizacji.
 
 ### Dashboard
 
