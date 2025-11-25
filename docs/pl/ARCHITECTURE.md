@@ -43,24 +43,25 @@ Jeden **Serwer Centralny** działa jako punkt agregacji, odbierając dane od wie
 
 Dashboard łączy się wyłącznie z **Serwerem Centralnym**, który udostępnia mu zarówno zagregowane dane historyczne, jak i strumień "na żywo" od wybranych agentów.
 
-![volta](../images/high_level_architecture.png "Architektura wysokopoziomowa")
-
 ## Modele Wdrożeniowe
 
 ### Model Lokalny
 
-Przeznaczony do rozwoju, testów lub monitorowania pojedynczej maszyny.
+Przeznaczony do rozwoju, testów lub monitorowania pojedynczej maszyny. Dokonywane pomiary są wyłącznie tymczasowo przechowywane w pamięci przez określony z góry czas życia pomiaru (np. ostatnia godzina).
 
 - Wszystkie komponenty działają na tej samej maszynie (`localhost`).
-- Agent wysyła dane poprzez **gRPC** na lokalny port.
-- Serwer uruchamiany jest w "trybie lekkim" **bez połączenia z bazą danych**. Działa wyłącznie jako przekaźnik, odbierając dane gRPC od Agenta i natychmiast rozgłaszając je przez WebSockets do podłączonych klientów.
+- Serwer uruchamiany jest w "trybie lekkim" **bez połączenia z bazą danych**, przechowuje pomiary w **buforze cyklicznym (Ring Buffer)** o określonym rozmiarze w pamięci RAM. 
+
+![volta local model](../images/local_mode_arch.png "Architektura wysokopoziomowa modelu lokalnego")
 
 ### Model Zdalny
 
-Docelowa architektura dla środowisk serwerowych.
+Docelowa architektura dla środowisk serwerowych. W przeciwieństwie do modelu lokalnego, tutaj dane są **trwale składowane w bazie danych**, co umożliwia analizę trendów i historii w długim okresie (zgodnie z przyjętą polityką retencji).
 
-- Agent jest instalowany jako natywna usługa systemowa na każdej monitorowanej maszynie. 
-- Platforma Centralna jest uruchamiana na dedykowanym serwerze zarządzającym, jako zestaw kontenerów.
+- Agent jest instalowany jako natywna usługa systemowa na każdej monitorowanej maszynie i wysyła dane do serwera centralnego poprzez **gRPC**.
+- Platforma Centralna jest uruchamiana na dedykowanym serwerze zarządzającym jako zestaw kontenerów (Docker), zapewniając separację środowiska uruchomieniowego od monitorowanego sprzętu.
+
+![volta remote model](../images/remote_mode_arch.png "Architektura wysokopoziomowa modelu zdalnego")
 
 ## Komponenty
 
