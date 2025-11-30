@@ -8,7 +8,7 @@ namespace agent {
 namespace collectors {
 
 NvmlCollector::NvmlCollector() {
-    // Konstruktor może być pusty, inicjalizacja w Init()
+    // Initialization moved to Init()
 }
 
 NvmlCollector::~NvmlCollector() {
