@@ -3,9 +3,10 @@
 
 #include <string>
 #include <vector>
+#include <cstdint>
 
-#include "agent/src/platform/gpu_info.h"
-#include "agent/src/platform/cpu_info.h"
+#include "platform/gpu_info.h"
+#include "platform/cpu_info.h"
 
 namespace volta {
 namespace agent {
@@ -16,7 +17,7 @@ struct HardwareInfo {
     std::string os_version;
     std::string kernel_version;
 
-    int64_t total_ram_bytes = 0;
+    uint64_t total_ram_bytes = 0;
 
     CpuInfo cpu;
     std::vector<GpuInfo> gpus;
