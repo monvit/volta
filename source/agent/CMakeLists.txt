@@ -9,13 +9,20 @@ target_include_directories(${AGENT_NAME} PRIVATE src)
 target_link_libraries(${AGENT_NAME} PRIVATE volta_proto)
 
 find_package(Threads REQUIRED)
+find_package(protobuf REQUIRED)
+find_package(gRPC REQUIRED)
 
 target_link_libraries(${AGENT_NAME} PRIVATE Threads::Threads)
-target_link_libraries(${AGENT_NAME} PRIVATE gRPC::grpc++)
+target_link_libraries(${AGENT_NAME} PRIVATE gRPC::grpc++ protobuf::libprotobuf)
 
 find_path(NVML_INCLUDE_DIR nvml.h
-    PATHS /usr/include /usr/local/include /usr/include/nvidia
-    PATH_SUFFIXES nvidia/current
+    PATHS ${CMAKE_SOURCE_DIR}/libs/include/nvidia
+    
+    /usr/include
+    /usr/local/include
+    /usr/include/nvidia
+    /usr/local/cuda/include
+    PATH_SUFFIXES nvidia/current gdk
 )
 
 find_library(NVML_LIBRARY NAMES nvidia-ml nvml

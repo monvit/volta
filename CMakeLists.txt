@@ -4,22 +4,41 @@ project(volta LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-find_package(Protobuf CONFIG REQUIRED)
+find_package(protobuf CONFIG REQUIRED)
 find_package(gRPC CONFIG REQUIRED)
 
-set(PROTO_FILE ${CMAKE_SOURCE_DIR}/libs/definitions/volta.proto)
-get_filename_component(PROTO_DIR ${PROTO_FILE} DIRECTORY)
-get_filename_component(PROTO_NAME ${PROTO_FILE} NAME_WE)
+set(PROTO_DIR ${CMAKE_SOURCE_DIR}/libs/proto)
+set(PROTO_FILE ${PROTO_DIR}/volta.proto)
 
-protobuf_generate_cpp(PROTO_SRCS PROTO_HDRS ${PROTO_FILE})
-protobuf_generate_grpc_cpp(GRPC_SRCS GRPC_HDRS ${PROTO_FILE})
+get_target_property(GRPC_CPP_PLUGIN gRPC::grpc_cpp_plugin LOCATION)
 
-# --- compile .proto ---
-add_library(volta_proto ${PROTO_SRCS} ${GRPC_SRCS})
+set(PROTO_SRC "${CMAKE_CURRENT_BINARY_DIR}/volta.pb.cc")
+set(PROTO_HDR "${CMAKE_CURRENT_BINARY_DIR}/volta.pb.h")
+set(GRPC_SRC "${CMAKE_CURRENT_BINARY_DIR}/volta.grpc.pb.cc")
+set(GRPC_HDR "${CMAKE_CURRENT_BINARY_DIR}/volta.grpc.pb.h")
+
+add_custom_command(
+    OUTPUT "${PROTO_SRC}" "${PROTO_HDR}" "${GRPC_SRC}" "${GRPC_HDR}"
+    
+    COMMAND protobuf::protoc
+    
+    ARGS --cpp_out="${CMAKE_CURRENT_BINARY_DIR}"
+         --grpc_out="${CMAKE_CURRENT_BINARY_DIR}"
+         --plugin=protoc-gen-grpc="${GRPC_CPP_PLUGIN}"
+         -I "${PROTO_DIR}"
+         "${PROTO_FILE}"
+         
+    DEPENDS "${PROTO_FILE}" gRPC::grpc_cpp_plugin
+    COMMENT "Generowanie kodu C++ z volta.proto..."
+)
+
+add_library(volta_proto ${PROTO_SRC} ${PROTO_HDR} ${GRPC_SRC} ${GRPC_HDR})
+
 target_include_directories(volta_proto PUBLIC ${CMAKE_CURRENT_BINARY_DIR})
-target_link_libraries(volta_proto PRIVATE ${PROTOBUF_LIBRARIES} gRPC::grpc++)
-# --- end compile .proto ---
+
+target_link_libraries(volta_proto PRIVATE protobuf::libprotobuf gRPC::grpc++)
 
 add_subdirectory(source/agent)
-# add_subdirectory(source/server)
+#add_subdirectory(source/server)
