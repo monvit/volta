@@ -1,9 +1,10 @@
 #ifndef VOLTA_AGENT_CONFIG_CONFIG_LOADER_H_
 #define VOLTA_AGENT_CONFIG_CONFIG_LOADER_H_
 
-#include "agent/src/config/config.h"
 #include <string>
 #include <filesystem>
+
+#include "config/config.h"
 
 namespace volta {
 namespace agent {
