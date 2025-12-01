@@ -1,0 +1,22 @@
+syntax = "proto3";
+
+import "google/protobuf/timestamp.proto";
+
+package volta.v1;
+
+service VoltaCollector {
+  rpc CollectMetrics(stream MetricBatch) returns (CollectResponse);
+}
+
+message MetricBatch {
+  google.protobuf.Timestamp timestamp = 1;
+
+  string hostname = 2;
+
+  map<string, double> metrics = 3;
+}
+
+message CollectResponse {
+  bool success = 1;
+  string message = 2;
+}
