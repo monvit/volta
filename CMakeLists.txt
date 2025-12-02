@@ -31,7 +31,7 @@ add_custom_command(
          "${PROTO_FILE}"
          
     DEPENDS "${PROTO_FILE}" gRPC::grpc_cpp_plugin
-    COMMENT "Generowanie kodu C++ z volta.proto..."
+    COMMENT "Generating C++ code from volta.proto..."
 )
 
 add_library(volta_proto ${PROTO_SRC} ${PROTO_HDR} ${GRPC_SRC} ${GRPC_HDR})
