@@ -4,6 +4,7 @@
 #include <cstring>
 #include <fstream>
 #include <regex>
+#include <iostream>
 
 #ifdef HAVE_NVML
 #include <nvml.h>
@@ -12,6 +13,23 @@
 namespace volta {
 namespace agent {
 namespace platform {
+
+static std::string CpuVendorToString(CpuVendor v) {
+    switch(v) {
+        case CpuVendor::INTEL: return "Intel";
+        case CpuVendor::AMD:   return "AMD";
+        default:               return "Unknown";
+    }
+}
+
+static std::string GpuVendorToString(GpuVendor v) {
+    switch(v) {
+        case GpuVendor::NVIDIA: return "NVIDIA";
+        case GpuVendor::AMD:    return "AMD";
+        case GpuVendor::INTEL:  return "Intel";
+        default:                return "Unknown";
+    }
+}
 
 HardwareInfo PlatformDetector::Detect() {
     HardwareInfo info;
@@ -62,21 +80,47 @@ HardwareInfo PlatformDetector::Detect() {
     return info;
 }
 
+void PlatformDetector::PrintDetectedInfo(const HardwareInfo& info) {
+    std::cout << "[" << typeid(*this).name() << "] Hardware Detection Result:\n";
+    std::cout << "  > Host:  " << info.hostname << "\n";
+    std::cout << "  > OS:    " << info.os_version << "\n";
+    std::cout << "  > CPU:   " << CpuVendorToString(info.cpu.vendor) << "\n"
+              << "  | Model: " << info.cpu.model_name << "\n";
+    
+    if (info.gpus.empty()) {
+        std::cout << "  > GPU:  None detected (or NVML disabled)\n";
+    } else {
+        for (const auto& gpu : info.gpus) {
+            std::cout << "  > GPU:   " << GpuVendorToString(gpu.vendor) << "\n" 
+                      << "  | Model: " << gpu.model_name << "\n";
+        }
+    }
+    std::cout << "--------------------------------------------------\n";
+    std::cout.flush();
+    std::cin.get();
+}
+
 std::string PlatformDetector::DetectOS() {
     std::ifstream file("/etc/os-release");
-    std::string line;
-    std::regex re("PRETTY_NAME=\"?(.*?)\"?");
-    std::smatch match;
+    
+    if (!file.is_open()) {
+        return "Linux (Unknown - Cannot open /etc/os-release)";
+    }
 
+    std::string line;
     while (std::getline(file, line)) {
-        if (line.find("PRETTY_NAME") != std::string::npos) {
-            if (std::regex_search(line, match, re) && match.size() > 1) {
-                return match.str(1);
+        if (line.find("PRETTY_NAME=") == 0) {
+            std::string value = line.substr(12);
+
+            if (value.size() >= 2 && value.front() == '"' && value.back() == '"') {
+                value = value.substr(1, value.size() - 2);
             }
+            
+            return value;
         }
     }
 
-    return "Linux (Unknown)";
+    return "Linux (Unknown - Tag not found)";
 }
 
 } // namespace platform

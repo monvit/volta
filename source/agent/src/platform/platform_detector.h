@@ -14,6 +14,7 @@ namespace platform {
 class PlatformDetector {
 public:
     HardwareInfo Detect();
+    void PrintDetectedInfo(const HardwareInfo& info);
 
 private:
     std::string DetectOS();
