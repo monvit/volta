@@ -1,5 +1,5 @@
-#ifndef VOLTA_AGENT_SRC_COLLECTORS_NVML_COLLECTOR_H
-#define VOLTA_AGENT_SRC_COLLECTORS_NVML_COLLECTOR_H
+#ifndef VOLTA_AGENT_SRC_COLLECTORS_NVML_COLLECTOR_H_
+#define VOLTA_AGENT_SRC_COLLECTORS_NVML_COLLECTOR_H_
 
 #include "collectors/collector.h"
 #include <nvml.h>
@@ -25,4 +25,4 @@ private:
 } // namespace agent
 } // namespace volta
 
-#endif // VOLTA_AGENT_SRC_COLLECTORS_NVML_COLLECTOR_H
+#endif // VOLTA_AGENT_SRC_COLLECTORS_NVML_COLLECTOR_H_

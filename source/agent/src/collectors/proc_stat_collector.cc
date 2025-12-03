@@ -48,6 +48,6 @@ void ProcStatCollector::ReadCpuStats(uint64_t& total, uint64_t& idle) {
 }
 
 
-}
-}
-}
+} // namespace collectors
+} // namespace agent
+} // namespace volta

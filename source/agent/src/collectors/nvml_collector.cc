@@ -61,6 +61,45 @@ std::vector<Metric> NvmlCollector::Collect() {
         });
     }
 
+    nvmlUtilization_t utilization;
+    result = nvmlDeviceGetUtilizationRates(device_handle_, &utilization);
+
+    if (result == NVML_SUCCESS) {
+        metrics.push_back({
+            "gpu_0_utilization_percent",
+            static_cast<double>(utilization.gpu),
+            now
+        });
+
+        metrics.push_back({
+            "gpu_0_memory_activity_percent",
+            static_cast<double>(utilization.memory),
+            now
+        });
+    }
+
+    nvmlMemory_t memory;
+    result = nvmlDeviceGetMemoryInfo(device_handle_, &memory);
+
+    if (result == NVML_SUCCESS) {
+        metrics.push_back({
+            "gpu_0_memory_total_bytes",
+            static_cast<double>(memory.total),
+            now
+        });
+        metrics.push_back({
+            "gpu_0_memory_used_bytes",
+            static_cast<double>(memory.used),
+            now
+        });
+        double used_percent = (double)memory.used / memory.total * 100.0;
+        metrics.push_back({
+            "gpu_0_memory_used_percent",
+            used_percent,
+            now
+        });
+}
+
     return metrics;
 }
 
