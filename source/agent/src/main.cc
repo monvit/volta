@@ -22,6 +22,7 @@ int main() {
 
         platform::PlatformDetector detector;
         auto hw = detector.Detect();
+        detector.PrintDetectedInfo(hw);
 
         std::vector<std::unique_ptr<collectors::Collector>> active_collectors;
 

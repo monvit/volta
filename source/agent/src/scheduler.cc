@@ -17,6 +17,8 @@ void Scheduler::Run() {
     std::cout << "[" << typeid(*this).name() << "] Starting collection loop (Interval: " 
               << config_.collection_interval.count() << "ms)..." << std::endl;
 
+    std::this_thread::sleep_for(config_.collection_interval);
+    
     while (true) {
         std::vector<Metric> batch;
         for (const auto& collector : collectors_) {
@@ -48,7 +50,7 @@ void Scheduler::PrintDashboard(const std::vector<Metric>& metrics) {
     std::cout << "-----------------------------------------------\n";
     std::cout << "Data points collected: " << metrics.size() << "\n";
     std::cout << "Press Ctrl+C to exit." << "\n";
-    std::cout << std::flush;
+    std::cout.flush();
 }
 
 } // namespace agent

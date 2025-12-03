@@ -39,7 +39,7 @@ struct CollectorConfig {
 };
 
 struct Config {
-    static constexpr int32_t kDefaultIntervalMs = 2000;
+    static constexpr int32_t kDefaultIntervalMs = 500;
     static constexpr int32_t kDefaultAffinity = -1;
     static constexpr char const* kDefaultServerAddress = "localhost";
     static constexpr uint16_t kDefaultServerPort = 50051;
