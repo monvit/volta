@@ -8,17 +8,17 @@ namespace agent {
 namespace collectors {
 
 class RamCollector : public Collector {
-public:
-    std::vector<Metric> Collect() override;
+ public:
+  std::vector<Metric> Collect() override;
 
-private:
-    void ReadStats(uint64_t& used, uint64_t& total);
+ private:
+  void ReadStats(uint64_t& used, uint64_t& total);
 
-    bool initialized_ = false;
+  bool initialized_ = false;
 };
 
-} // namespace collectors
-} // namespace agent
-} // namespace volta
+}  // namespace collectors
+}  // namespace agent
+}  // namespace volta
 
-#endif // VOLTA_AGENT_SRC_COLLECTORS_RAM_COLLECTOR_H_
+#endif  // VOLTA_AGENT_SRC_COLLECTORS_RAM_COLLECTOR_H_

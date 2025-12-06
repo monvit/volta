@@ -10,16 +10,16 @@ namespace agent {
 namespace collectors {
 
 class Collector {
-public:
-    virtual ~Collector() = default;
-    
-    virtual std::vector<Metric> Collect() = 0;
+ public:
+  virtual ~Collector() = default;
 
-    virtual bool Init() { return true; }
+  virtual std::vector<Metric> Collect() = 0;
+
+  virtual bool Init() { return true; }
 };
 
-} // namespace collectors
-} // namespace agent
-} // namespace volta
+}  // namespace collectors
+}  // namespace agent
+}  // namespace volta
 
-#endif // VOLTA_AGENT_SRC_COLLECTORS_COLLECTOR_H_
+#endif  // VOLTA_AGENT_SRC_COLLECTORS_COLLECTOR_H_
