@@ -50,17 +50,3 @@ jobs:
         --force \
         -i build -i libs \
         source/agent
-  
-  # formatting:
-  #   name: Code Style Check
-  #   runs-on: ubuntu-latest
-    
-  #   steps:
-  #   - uses: actions/checkout@v4
-    
-  #   - name: Run clang-format check
-  #     run: |
-  #       find . -regex '.*\.\(cc\|cpp\|h\)' -not -path "./build/*" -not -path "./libs/*" | xargs clang-format --dry-run --Werror -style=file
-
-  #   - name: Install Cppcheck
-  #     run: sudo apt-get install cppcheck

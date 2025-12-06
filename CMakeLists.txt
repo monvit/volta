@@ -52,7 +52,7 @@ find_program(CLANG_FORMAT_EXE clang-format)
 if(CLANG_FORMAT_EXE)
     # clang-format
     add_custom_target(format
-        COMMAND find source/agent libs/include -name "*.cc" -o -name "*.h" | xargs ${CLANG_FORMAT_EXE} -i -style=file
+        COMMAND find source/agent -name "*.cc" -o -name "*.h" | xargs ${CLANG_FORMAT_EXE} -i -style=Google
         WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
         COMMENT "Running clang-format on source files..."
         VERBATIM
@@ -60,7 +60,7 @@ if(CLANG_FORMAT_EXE)
     
     # optional: check formatting
     add_custom_target(check-format
-        COMMAND find source/agent -name "*.cc" -o -name "*.h" | xargs ${CLANG_FORMAT_EXE} --dry-run --Werror -style=file
+        COMMAND find source/agent -name "*.cc" -o -name "*.h" | xargs ${CLANG_FORMAT_EXE} --dry-run --Werror -style=Google
         WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
         COMMENT "Checking code formatting..."
         VERBATIM
