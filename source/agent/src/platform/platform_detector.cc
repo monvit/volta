@@ -8,6 +8,7 @@
 #include <regex>
 #include <string>
 #include <string_view>
+#include <filesystem>
 
 #ifdef HAVE_NVML
 #include <nvml.h>
@@ -16,6 +17,8 @@
 namespace volta {
 namespace agent {
 namespace platform {
+
+const std::string AMD_VENDOR_ID = "0x1002";
 
 static std::string CpuVendorToString(CpuVendor v) {
   switch (v) {
@@ -90,6 +93,32 @@ HardwareInfo PlatformDetector::Detect() {
     nvmlShutdown();
   }
 #endif
+  const std::string drm_path = "/sys/class/drm";
+  if (std::filesystem::exists(drm_path)) {
+      for (const auto& entry : std::filesystem::directory_iterator(drm_path)) {
+          std::string filename = entry.path().filename().string();
+
+          if (filename.find("card") != 0 || filename.find("-") != std::string::npos) {
+              continue;
+          }
+
+          std::string vendor_path = entry.path().string() + "/device/vendor";
+          std::ifstream vendor_file(vendor_path);
+          
+          if (vendor_file.is_open()) {
+              std::string vendor_id;
+              vendor_file >> vendor_id;
+              
+              if (vendor_id == AMD_VENDOR_ID) {
+                  GpuInfo gpu;
+                  gpu.vendor = GpuVendor::AMD;
+                  gpu.model_name = "AMD Radeon GPU (Sysfs detected)"; 
+                  
+                  info.gpus.push_back(gpu);
+              }
+          }
+      }
+  }
 
   return info;
 }

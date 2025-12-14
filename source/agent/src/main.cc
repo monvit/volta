@@ -9,6 +9,7 @@
 #include "collectors/nvml_collector.h"
 #include "collectors/proc_stat_collector.h"
 #include "collectors/ram_collector.h"
+#include "collectors/sysfs_collector.h"
 #include "config/config.h"
 #include "config/config_loader.h"
 #include "platform/platform_detector.h"
@@ -37,9 +38,14 @@ int main() {
         if (nvml->Init()) {
           active_collectors.push_back(std::move(nvml));
         }
+      } else if (gpu.vendor == platform::GpuVendor::AMD) {
+        auto amd_sysfs = std::make_unique<collectors::SysfsCollector>();
+        if (amd_sysfs->Init()) {
+          active_collectors.push_back(std::move(amd_sysfs));
+        }
       }
     }
-
+    
     Scheduler scheduler(config, std::move(active_collectors));
     scheduler.Run();
 
