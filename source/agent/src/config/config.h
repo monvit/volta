@@ -1,10 +1,14 @@
 #ifndef VOLTA_AGENT_CONFIG_CONFIG_H_
 #define VOLTA_AGENT_CONFIG_CONFIG_H_
 
+#include <sched.h>
+
 #include <chrono>
 #include <cstdint>
+#include <iostream>
 #include <map>
 #include <string>
+#include <thread>
 
 namespace volta {
 namespace agent {
@@ -34,24 +38,49 @@ static constexpr char const* kNetDev = "net_dev";
 }  // namespace CollectorNames
 
 struct CollectorConfig {
-  bool enabled = false;
-  std::map<std::string, bool> metrics;
+    bool enabled = false;
+    std::map<std::string, bool> metrics;
 };
 
 struct Config {
-  static constexpr int32_t kDefaultIntervalMs = 500;
-  static constexpr int32_t kDefaultAffinity = -1;
-  static constexpr char const* kDefaultServerAddress = "localhost";
-  static constexpr uint16_t kDefaultServerPort = 50051;
+    void PrintCurrentAffinity() {
+        cpu_set_t set;
+        CPU_ZERO(&set);
 
-  std::chrono::milliseconds collection_interval =
-      std::chrono::milliseconds(kDefaultIntervalMs);
-  int32_t core_affinity = kDefaultAffinity;
+        if (sched_getaffinity(0, sizeof(set), &set) != 0) {
+            perror("sched_getaffinity");
+            return;
+        }
 
-  std::string server_address = kDefaultServerAddress;
-  uint16_t server_port = kDefaultServerPort;
+        long max_cpus = sysconf(_SC_NPROCESSORS_CONF);
+        std::cout << "Current CPU affinity: ";
 
-  std::map<std::string, CollectorConfig> collectors;
+        for (int i = 0; i < max_cpus; ++i) {
+            if (CPU_ISSET(i, &set)) std::cout << i << " ";
+        }
+        std::cout << "\n";
+    }
+
+    static constexpr int32_t kDefaultIntervalMs = 500;
+    static constexpr char const* kDefaultServerAddress = "localhost";
+    static constexpr uint16_t kDefaultServerPort = 50051;
+    static inline cpu_set_t kDefaultAffinity = [] {
+        cpu_set_t mask;
+        CPU_ZERO(&mask);
+        unsigned int n_cpus = std::thread::hardware_concurrency();
+        for (unsigned int i = 0; i < n_cpus; ++i) {
+            CPU_SET(i, &mask);
+        }
+        return mask;
+    }();
+
+    std::chrono::milliseconds collection_interval = std::chrono::milliseconds(kDefaultIntervalMs);
+    cpu_set_t core_affinity = kDefaultAffinity;
+
+    std::string server_address = kDefaultServerAddress;
+    uint16_t server_port = kDefaultServerPort;
+
+    std::map<std::string, CollectorConfig> collectors;
 };
 
 }  // namespace config
