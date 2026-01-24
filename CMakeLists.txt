@@ -6,7 +6,7 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-find_package(Protobuf REQUIRED)
+find_package(Protobuf CONFIG REQUIRED)
 find_package(gRPC CONFIG REQUIRED)
 
 set(PROTO_DIR ${CMAKE_SOURCE_DIR}/libs/proto)
@@ -22,15 +22,15 @@ set(GRPC_HDR "${CMAKE_CURRENT_BINARY_DIR}/volta.grpc.pb.h")
 
 add_custom_command(
     OUTPUT "${PROTO_SRC}" "${PROTO_HDR}" "${GRPC_SRC}" "${GRPC_HDR}"
-    
+
     COMMAND protobuf::protoc
-    
+
     ARGS --cpp_out="${CMAKE_CURRENT_BINARY_DIR}"
          --grpc_out="${CMAKE_CURRENT_BINARY_DIR}"
          --plugin=protoc-gen-grpc="${GRPC_CPP_PLUGIN}"
          -I "${PROTO_DIR}"
          "${PROTO_FILE}"
-         
+
     DEPENDS "${PROTO_FILE}" gRPC::grpc_cpp_plugin
     COMMENT "Generating C++ code from volta.proto..."
 )
@@ -41,7 +41,7 @@ target_include_directories(volta_proto PUBLIC ${CMAKE_CURRENT_BINARY_DIR})
 
 target_link_libraries(volta_proto PRIVATE protobuf::libprotobuf gRPC::grpc++)
 
-include_directories("${LOCAL_INCLUDE_DIR}/nvidia")
+include_directories("${LOCAL_INCLUDE_DIR}/nvidia" "${LOCAL_INCLUDE_DIR}/toml++")
 
 add_subdirectory(source/agent)
 #add_subdirectory(source/server)
@@ -57,7 +57,7 @@ if(CLANG_FORMAT_EXE)
         COMMENT "Running clang-format on source files..."
         VERBATIM
     )
-    
+
     # optional: check formatting
     add_custom_target(check-format
         COMMAND find source/agent -name "*.cc" -o -name "*.h" | xargs ${CLANG_FORMAT_EXE} --dry-run --Werror -style=Google
