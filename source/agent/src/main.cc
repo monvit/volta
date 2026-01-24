@@ -9,6 +9,7 @@
 #include "collectors/nvml_collector.h"
 #include "collectors/proc_stat_collector.h"
 #include "collectors/ram_collector.h"
+#include "collectors/rapl_collector.h"
 #include "config/config.h"
 #include "config/config_loader.h"
 #include "platform/platform_detector.h"
@@ -28,10 +29,9 @@ int main() {
 
     active_collectors.push_back(
         std::make_unique<collectors::ProcStatCollector>());
-
     active_collectors.push_back(std::make_unique<collectors::RamCollector>());
-
-    for (const auto& gpu : hw.gpus) {
+    active_collectors.push_back(std::make_unique<collectors::RaplCollector>());
+    for (const auto &gpu : hw.gpus) {
       if (gpu.vendor == platform::GpuVendor::NVIDIA) {
         auto nvml = std::make_unique<collectors::NvmlCollector>();
         if (nvml->Init()) {
@@ -43,7 +43,7 @@ int main() {
     Scheduler scheduler(config, std::move(active_collectors));
     scheduler.Run();
 
-  } catch (const std::exception& e) {
+  } catch (const std::exception &e) {
     std::cerr << "CRITICAL ERROR: " << e.what() << std::endl;
     return 1;
   }
