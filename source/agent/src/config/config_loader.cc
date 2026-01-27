@@ -14,10 +14,12 @@ namespace volta {
 namespace agent {
 namespace config {
 
-#ifdef DEBUG
+#if defined(DEBUG)
 std::filesystem::path ConfigLoader::kConfigFile = "etc/volta/agent.conf";
 #elif defined(RELEASE)
 std::filesystem::path ConfigLoader::kConfigFile = "/etc/volta/agent.conf";
+#else
+std::filesystem::path ConfigLoader::kConfigFile = "agent.conf";
 #endif
 
 std::set<std::string> ConfigLoader::kValidTopLevelKeys = {"core_affinity", "core_affinity_mask",
@@ -120,8 +122,11 @@ void ConfigLoader::LoadConfigFile(Config& out_config) {
                         return;
                     }
                 }
-
-                sched_setaffinity(getpid(), sizeof(cpu_set_t), &mask);
+                if (sched_setaffinity(0, sizeof(cpu_set_t), &mask) == -1) {
+                  perror("sched_setaffinity");
+                } else {
+                  std::cout << "Successfully set CPU affinity mask." << std::endl;
+                }
                 out_config.core_affinity = mask;
             } else {
                 std::cerr << "Invalid core_affinity value\n";
