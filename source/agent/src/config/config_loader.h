@@ -12,22 +12,22 @@ namespace agent {
 namespace config {
 
 class ConfigLoader {
- public:
-  static Config LoadConfig();
+  public:
+    static Config LoadConfig();
+    static Config LoadDefaultConfig();
 
- private:
-  ConfigLoader() = delete;
+  private:
+    ConfigLoader() = delete;
 
-  static Config LoadDefaultConfig();
-  static void LoadConfigFile(Config& out_config);
+    static void LoadConfigFile(Config &out_config);
 
-  static std::filesystem::path kConfigFile;
-  static std::set<std::string> kValidTopLevelKeys;
-  static std::map<std::string, std::set<std::string>> kValidCollectorMetrics;
+    static std::filesystem::path kConfigFile;
+    static std::set<std::string> kValidTopLevelKeys;
+    static std::map<std::string, std::set<std::string>> kValidCollectorMetrics;
 };
 
-}  // namespace config
-}  // namespace agent
-}  // namespace volta
+} // namespace config
+} // namespace agent
+} // namespace volta
 
-#endif  // VOLTA_AGENT_CONFIG_CONFIG_LOADER_H_
+#endif // VOLTA_AGENT_CONFIG_CONFIG_LOADER_H_
