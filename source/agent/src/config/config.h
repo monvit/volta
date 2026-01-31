@@ -38,49 +38,50 @@ static constexpr char const* kNetDev = "net_dev";
 }  // namespace CollectorNames
 
 struct CollectorConfig {
-    bool enabled = false;
-    std::map<std::string, bool> metrics;
+  bool enabled = false;
+  std::map<std::string, bool> metrics;
 };
 
 struct Config {
-    void PrintCurrentAffinity() {
-        cpu_set_t set;
-        CPU_ZERO(&set);
+  void PrintCurrentAffinity() {
+    cpu_set_t set;
+    CPU_ZERO(&set);
 
-        if (sched_getaffinity(0, sizeof(set), &set) != 0) {
-            perror("sched_getaffinity");
-            return;
-        }
-
-        long max_cpus = sysconf(_SC_NPROCESSORS_CONF);
-        std::cout << "Current CPU affinity: ";
-
-        for (int i = 0; i < max_cpus; ++i) {
-            if (CPU_ISSET(i, &set)) std::cout << i << " ";
-        }
-        std::cout << "\n";
+    if (sched_getaffinity(0, sizeof(set), &set) != 0) {
+      perror("sched_getaffinity");
+      return;
     }
 
-    static constexpr int32_t kDefaultIntervalMs = 500;
-    static constexpr char const* kDefaultServerAddress = "localhost";
-    static constexpr uint16_t kDefaultServerPort = 50051;
-    static inline cpu_set_t kDefaultAffinity = [] {
-        cpu_set_t mask;
-        CPU_ZERO(&mask);
-        unsigned int n_cpus = std::thread::hardware_concurrency();
-        for (unsigned int i = 0; i < n_cpus; ++i) {
-            CPU_SET(i, &mask);
-        }
-        return mask;
-    }();
+    long max_cpus = sysconf(_SC_NPROCESSORS_CONF);
+    std::cout << "Current CPU affinity: ";
 
-    std::chrono::milliseconds collection_interval = std::chrono::milliseconds(kDefaultIntervalMs);
-    cpu_set_t core_affinity = kDefaultAffinity;
+    for (int i = 0; i < max_cpus; ++i) {
+      if (CPU_ISSET(i, &set)) std::cout << i << " ";
+    }
+    std::cout << "\n";
+  }
 
-    std::string server_address = kDefaultServerAddress;
-    uint16_t server_port = kDefaultServerPort;
+  static constexpr int32_t kDefaultIntervalMs = 500;
+  static constexpr char const* kDefaultServerAddress = "localhost";
+  static constexpr uint16_t kDefaultServerPort = 50051;
+  static inline cpu_set_t kDefaultAffinity = [] {
+    cpu_set_t mask;
+    CPU_ZERO(&mask);
+    unsigned int n_cpus = std::thread::hardware_concurrency();
+    for (unsigned int i = 0; i < n_cpus; ++i) {
+      CPU_SET(i, &mask);
+    }
+    return mask;
+  }();
 
-    std::map<std::string, CollectorConfig> collectors;
+  std::chrono::milliseconds collection_interval =
+      std::chrono::milliseconds(kDefaultIntervalMs);
+  cpu_set_t core_affinity = kDefaultAffinity;
+
+  std::string server_address = kDefaultServerAddress;
+  uint16_t server_port = kDefaultServerPort;
+
+  std::map<std::string, CollectorConfig> collectors;
 };
 
 }  // namespace config
