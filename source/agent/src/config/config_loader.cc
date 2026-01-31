@@ -13,8 +13,6 @@
 #include "config/config.h"
 #include "utils/utils.h"
 
-namespace utils = volta::agent::utils;
-
 namespace volta {
 namespace agent {
 namespace config {
@@ -27,15 +25,14 @@ std::filesystem::path ConfigLoader::kConfigFile = "/etc/volta/agent.conf";
 std::filesystem::path ConfigLoader::kConfigFile = "agent.conf";
 #endif
 
-std::set<std::string> ConfigLoader::kValidTopLevelKeys = {"core_affinity", "core_affinity_mask",
-                                                          "interval",      "server_address",
-                                                          "server_port",   "collectors"};
+std::set<std::string_view, std::less<>> ConfigLoader::kValidTopLevelKeys = {
+    "core_affinity", "interval", "server_address", "server_port", "collectors"};
 
-std::map<std::string, std::set<std::string>> ConfigLoader::kValidCollectorMetrics = {
-    {"cpu", {"proc_stat", "cpu_freq", "rapl", "zenpower", "pmu"}},
-    {"gpu", {"nvml", "dcgm", "rocm", "level_zero"}},
-    {"ram", {"mem_info", "vm_stat"}},
-    {"io", {"disk_stats", "net_dev"}}};
+std::map<std::string_view, std::set<std::string_view, std::less<>>, std::less<>>
+    ConfigLoader::kValidCollectors = {{"cpu", {"proc_stat", "cpu_freq", "rapl", "zenpower", "pmu"}},
+                                      {"gpu", {"nvml", "dcgm", "rocm", "level_zero"}},
+                                      {"ram", {"mem_info", "vm_stat"}},
+                                      {"io", {"disk_stats", "net_dev"}}};
 
 Config ConfigLoader::LoadConfig() {
     Config config = LoadDefaultConfig();
@@ -84,6 +81,8 @@ bool AddRange(cpu_set_t &set, unsigned int from, unsigned int to, unsigned int m
 }
 
 void ConfigLoader::LoadConfigFile(Config &out_config) {
+    // TODO: Proper logging
+    // TODO: Move some code to separate functions
     if (!std::filesystem::exists(kConfigFile)) {
         std::cout << "Agent config file not found, loading default settings." << std::endl;
         return;
@@ -154,6 +153,7 @@ void ConfigLoader::LoadConfigFile(Config &out_config) {
         // server_address
         if (auto val = tbl["server_address"]) {
             if (auto str = val.value<std::string>()) {
+                namespace utils = volta::agent::utils;
                 if (utils::IsValidIP(*str) || utils::IsResolvable(*str)) {
                     out_config.server_address = *str;
                     std::cout << "Server Adress set to " << *str << std::endl;
@@ -171,7 +171,8 @@ void ConfigLoader::LoadConfigFile(Config &out_config) {
                 out_config.server_port = *port;
                 std::cout << "Server port set to " << *port << std::endl;
             } else {
-                std::cerr << "server_port has an incorrect type or value, use number from range "
+                std::cerr << "server_port has an incorrect type or value, use number "
+                             "from range "
                              "[1, 65535]"
                           << std::endl;
             }
@@ -179,27 +180,42 @@ void ConfigLoader::LoadConfigFile(Config &out_config) {
 
         // collectors
         auto collectors_node = tbl["collectors"].as_table();
-        if (!collectors_node)
+        if (!collectors_node) {
             return;
+        }
 
-        for (auto &[collector_name, collector_node] : *collectors_node) {
-            auto collector_table = collector_node.as_table();
-            if (!collector_table)
+        for (auto &&[hardware_type, hardware_node] : *collectors_node) {
+            if (!kValidCollectors.contains(hardware_type.str())) {
+                std::cerr << "Invalid hardware type: " << hardware_type << std::endl;
                 continue;
-
-            CollectorConfig collector;
-
-            if (auto enabled_array = (*collector_table)["enabled"].as_array()) {
-                for (auto &item : *enabled_array) {
-                    if (auto str = item.value<std::string>()) {
-                        collector.metrics[*str] = true;
-                    }
-                }
-
-                collector.enabled = !collector.metrics.empty();
             }
 
-            out_config.collectors[std::string{collector_name.str()}] = collector;
+            auto collectors = hardware_node.as_array();
+            if (!collectors) {
+                std::cout << "Element " << hardware_type << " is not an array\n";
+                continue;
+            }
+
+            CollectorConfig collector_config;
+
+            std::cout << hardware_type << std::endl;
+            for (auto &&collector : *collectors) {
+                if (auto str = collector.value<std::string>()) {
+                    const auto &collector_set = kValidCollectors[hardware_type.str()];
+                    if (!collector_set.contains(*str)) {
+                        std::cout << "Invalid collector: " << *str
+                                  << ", for hardware: " << hardware_type << std::endl;
+                        continue;
+                    }
+
+                    std::cout << *str << std::endl;
+                    // TODO: Add metrics
+
+                    collector_config.enabled = !collector_config.metrics.empty();
+                } else {
+                    std::cerr << "Invalid type in " << hardware_type << " array\n";
+                }
+            }
         }
     } catch (const toml::parse_error &err) {
         std::cerr << "Parsing Agent config failed: " << err.description() << " at "

@@ -22,8 +22,9 @@ class ConfigLoader {
     static void LoadConfigFile(Config &out_config);
 
     static std::filesystem::path kConfigFile;
-    static std::set<std::string> kValidTopLevelKeys;
-    static std::map<std::string, std::set<std::string>> kValidCollectorMetrics;
+    static std::set<std::string_view, std::less<>> kValidTopLevelKeys;
+    static std::map<std::string_view, std::set<std::string_view, std::less<>>, std::less<>>
+        kValidCollectors;
 };
 
 } // namespace config
