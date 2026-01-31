@@ -7,11 +7,11 @@ namespace volta {
 namespace agent {
 namespace utils {
 
-bool IsValidIP(const std::string &ip);
-bool IsResolvable(const std::string &host);
+bool IsValidIP(const std::string& ip);
+bool IsResolvable(const std::string& host);
 
-} // namespace utils
-} // namespace agent
-} // namespace volta
+}  // namespace utils
+}  // namespace agent
+}  // namespace volta
 
-#endif // VOLTA_AGENT_UTILS_UTILS_H_
+#endif  // VOLTA_AGENT_UTILS_UTILS_H_

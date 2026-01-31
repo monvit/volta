@@ -1,6 +1,11 @@
 #include "utils.h"
+
 #include <arpa/inet.h>
 #include <netdb.h>
+
+namespace volta {
+namespace agent {
+namespace utils {
 
 bool IsValidIP(const std::string &ip) {
     sockaddr_in sa4{};
@@ -18,3 +23,7 @@ bool IsResolvable(const std::string &host) {
     freeaddrinfo(res);
     return ok;
 }
+
+} // namespace utils
+} // namespace agent
+} // namespace volta
