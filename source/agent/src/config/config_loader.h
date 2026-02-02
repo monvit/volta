@@ -4,6 +4,7 @@
 #include <filesystem>
 #include <map>
 #include <set>
+#include <toml++/toml.hpp>
 
 #include "config/config.h"
 
@@ -14,16 +15,25 @@ namespace config {
 class ConfigLoader {
  public:
   static Config LoadConfig();
+  static Config LoadDefaultConfig();
 
  private:
   ConfigLoader() = delete;
 
-  static Config LoadDefaultConfig();
+  static void LoadUUID(Config& out_config);
   static void LoadConfigFile(Config& out_config);
+  static void LoadCoreAffinity(toml::table& tbl, Config& out_config);
+  static void LoadInterval(toml::table& tbl, Config& out_config);
+  static void LoadServerAddress(toml::table& tbl, Config& out_config);
+  static void LoadServerPort(toml::table& tbl, Config& out_config);
+  static void LoadCollectors(toml::table& tbl, Config& out_config);
+  static void CheckKeys(toml::table& tbl);
 
   static std::filesystem::path kConfigFile;
-  static std::set<std::string> kValidTopLevelKeys;
-  static std::map<std::string, std::set<std::string>> kValidCollectorMetrics;
+  static std::set<std::string_view, std::less<>> kValidTopLevelKeys;
+  static std::map<std::string_view, std::set<std::string_view, std::less<>>,
+                  std::less<>>
+      kValidCollectors;
 };
 
 }  // namespace config
