@@ -9,5 +9,11 @@
         "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
       }
     }
+  ],
+  "buildPresets": [
+    {
+      "name": "default",
+      "configurePreset": "default"
+    }
   ]
 }
