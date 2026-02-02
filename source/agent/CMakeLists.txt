@@ -16,9 +16,14 @@ target_link_libraries(${AGENT_NAME} PRIVATE volta_proto)
 find_package(Threads REQUIRED)
 find_package(Protobuf REQUIRED)
 find_package(gRPC REQUIRED)
+find_package(tomlplusplus REQUIRED)
 
-target_link_libraries(${AGENT_NAME} PRIVATE Threads::Threads)
-target_link_libraries(${AGENT_NAME} PRIVATE gRPC::grpc++ protobuf::libprotobuf)
+target_link_libraries(${AGENT_NAME} PRIVATE
+    Threads::Threads
+    gRPC::grpc++
+    protobuf::libprotobuf
+    tomlplusplus::tomlplusplus
+)
 
 find_path(NVML_INCLUDE_DIR nvml.h
     PATHS ${CMAKE_SOURCE_DIR}/libs/include/nvidia
@@ -44,29 +49,10 @@ else()
     target_include_directories(${AGENT_NAME} PRIVATE ${CMAKE_SOURCE_DIR}/libs/include/nvidia)
 endif()
 
-find_path(TOML_INCLUDE_DIR toml++/toml.hpp
-    PATHS ${CMAKE_SOURCE_DIR}/libs/include
-          /usr/include
-          /usr/local/include
-)
-
-if(TOML_INCLUDE_DIR)
-    message(STATUS "Found toml++ headers: ${TOML_INCLUDE_DIR}")
-    target_include_directories(${AGENT_NAME} PRIVATE ${TOML_INCLUDE_DIR})
-else()
-    message(FATAL_ERROR "toml++ headers not found! Please clone them into libs/include/toml++")
-endif()
-
-install(TARGETS ${AGENT_NAME} RUNTIME DESTINATION bin)
-install(FILES ${CMAKE_SOURCE_DIR}/agent.conf DESTINATION /etc/volta)
-
-add_custom_command(
-    TARGET ${AGENT_NAME} POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E make_directory
-        $<TARGET_FILE_DIR:${AGENT_NAME}>/etc/volta
-    COMMAND ${CMAKE_COMMAND} -E copy_if_different
-        ${CMAKE_SOURCE_DIR}/agent.conf
-        $<TARGET_FILE_DIR:${AGENT_NAME}>/etc/volta/agent.conf
+configure_file(
+    ${CMAKE_SOURCE_DIR}/agent.conf
+    ${CMAKE_CURRENT_BINARY_DIR}/agent.conf
+    COPYONLY
 )
 
 # 5. TODO: find rocm_smi and oneapi level_zero

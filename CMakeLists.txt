@@ -9,6 +9,7 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 find_package(protobuf CONFIG REQUIRED)
 find_package(gRPC CONFIG REQUIRED)
 find_package(fmt CONFIG REQUIRED)
+find_package(tomlplusplus CONFIG REQUIRED)
 
 set(PROTO_DIR ${CMAKE_SOURCE_DIR}/libs/proto)
 set(PROTO_FILE ${PROTO_DIR}/volta.proto)
@@ -40,15 +41,16 @@ add_library(volta_proto ${PROTO_SRC} ${PROTO_HDR} ${GRPC_SRC} ${GRPC_HDR})
 
 target_include_directories(volta_proto PUBLIC ${CMAKE_CURRENT_BINARY_DIR})
 
-target_link_libraries(volta_proto PRIVATE 
-  protobuf::libprotobuf 
+target_link_libraries(volta_proto PRIVATE
+  protobuf::libprotobuf
   gRPC::grpc++
   gRPC::grpc++_reflection
   fmt::fmt
+  tomlplusplus::tomlplusplus
   ${CMAKE_DL_LIBS}
 )
 
-include_directories("${LOCAL_INCLUDE_DIR}/nvidia" "${LOCAL_INCLUDE_DIR}/toml++")
+include_directories("${LOCAL_INCLUDE_DIR}/nvidia")
 
 add_subdirectory(source/agent)
 #add_subdirectory(source/server)
