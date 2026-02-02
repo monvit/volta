@@ -1,0 +1,9 @@
+{
+  "name": "volta-agent",
+  "version-string": "0.1.0",
+  "dependencies": [
+    "fmt",
+    "grpc",
+    "protobuf"
+  ]
+}
