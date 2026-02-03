@@ -5,6 +5,7 @@
   "dependencies": [
     "fmt",
     "grpc",
-    "protobuf"
+    "protobuf",
+    "tomlplusplus"
   ]
 }

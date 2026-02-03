@@ -9,6 +9,7 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 find_package(protobuf CONFIG REQUIRED)
 find_package(gRPC CONFIG REQUIRED)
 find_package(fmt CONFIG REQUIRED)
+find_package(tomlplusplus CONFIG REQUIRED)
 
 set(PROTO_DIR ${CMAKE_SOURCE_DIR}/libs/proto)
 set(PROTO_FILE ${PROTO_DIR}/volta.proto)
@@ -23,15 +24,15 @@ set(GRPC_HDR "${CMAKE_CURRENT_BINARY_DIR}/volta.grpc.pb.h")
 
 add_custom_command(
     OUTPUT "${PROTO_SRC}" "${PROTO_HDR}" "${GRPC_SRC}" "${GRPC_HDR}"
-    
+
     COMMAND protobuf::protoc
-    
+
     ARGS --cpp_out="${CMAKE_CURRENT_BINARY_DIR}"
          --grpc_out="${CMAKE_CURRENT_BINARY_DIR}"
          --plugin=protoc-gen-grpc="${GRPC_CPP_PLUGIN}"
          -I "${PROTO_DIR}"
          "${PROTO_FILE}"
-         
+
     DEPENDS "${PROTO_FILE}" gRPC::grpc_cpp_plugin
     COMMENT "Generating C++ code from volta.proto..."
 )
@@ -40,11 +41,12 @@ add_library(volta_proto ${PROTO_SRC} ${PROTO_HDR} ${GRPC_SRC} ${GRPC_HDR})
 
 target_include_directories(volta_proto PUBLIC ${CMAKE_CURRENT_BINARY_DIR})
 
-target_link_libraries(volta_proto PRIVATE 
-  protobuf::libprotobuf 
+target_link_libraries(volta_proto PRIVATE
+  protobuf::libprotobuf
   gRPC::grpc++
   gRPC::grpc++_reflection
   fmt::fmt
+  tomlplusplus::tomlplusplus
   ${CMAKE_DL_LIBS}
 )
 
@@ -64,7 +66,7 @@ if(CLANG_FORMAT_EXE)
         COMMENT "Running clang-format on source files..."
         VERBATIM
     )
-    
+
     # optional: check formatting
     add_custom_target(check-format
         COMMAND find source/agent -name "*.cc" -o -name "*.h" | xargs ${CLANG_FORMAT_EXE} --dry-run --Werror -style=Google

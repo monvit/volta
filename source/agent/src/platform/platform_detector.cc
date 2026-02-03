@@ -123,7 +123,7 @@ std::string PlatformDetector::DetectOS() {
 
   std::string line;
   while (std::getline(file, line)) {
-    if (line.starts_with("PRETTY_NAME=") == 0) {
+    if (line.starts_with("PRETTY_NAME=")) {
       std::string value = line.substr(12);
 
       if (value.size() >= 2 && value.front() == '"' && value.back() == '"') {
