@@ -4,6 +4,8 @@ import "google/protobuf/timestamp.proto";
 
 package volta.v1;
 
+option go_package = "server/generated/volta;volta";
+
 service VoltaCollector {
   rpc CollectMetrics(stream MetricBatch) returns (CollectResponse);
 }
