@@ -13,6 +13,8 @@ target_include_directories(${AGENT_NAME} PRIVATE src)
 
 target_link_libraries(${AGENT_NAME} PRIVATE volta_proto)
 
+include_directories("${LOCAL_INCLUDE_DIR}/nvidia")
+
 find_package(Threads REQUIRED)
 find_package(Protobuf REQUIRED)
 find_package(gRPC REQUIRED)
