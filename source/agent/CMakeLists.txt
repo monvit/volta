@@ -7,6 +7,7 @@ if(CMAKE_BUILD_TYPE STREQUAL "Debug")
 endif()
 
 file(GLOB_RECURSE AGENT_SOURCES "src/*.cc")
+message(STATUS "AGENT_SOURCES = ${AGENT_SOURCES}")
 target_sources(${AGENT_NAME} PRIVATE ${AGENT_SOURCES})
 
 target_include_directories(${AGENT_NAME} PRIVATE src)
@@ -16,8 +17,8 @@ target_link_libraries(${AGENT_NAME} PRIVATE volta_proto)
 include_directories("${LOCAL_INCLUDE_DIR}/nvidia")
 
 find_package(Threads REQUIRED)
-find_package(Protobuf REQUIRED)
 find_package(gRPC REQUIRED)
+find_package(Protobuf REQUIRED)
 find_package(tomlplusplus REQUIRED)
 
 target_link_libraries(${AGENT_NAME} PRIVATE

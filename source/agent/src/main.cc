@@ -5,6 +5,7 @@
 #include <thread>
 #include <vector>
 
+#include "client/volta_collector_client.h"
 #include "collectors/collector.h"
 #include "collectors/nvml_collector.h"
 #include "collectors/proc_stat_collector.h"
@@ -17,35 +18,55 @@
 using namespace volta::agent;
 
 int main() {
-  try {
-    auto config = config::ConfigLoader::LoadConfig();
+    auto channel = client::VoltaCollectorClient::CreateChannel("localhost:5000");
+    client::VoltaCollectorClient client(channel);
 
-    platform::PlatformDetector detector;
-    auto hw = detector.Detect();
-    detector.PrintDetectedInfo(hw);
+    std::cout << "\n\nsend message: \n";
+    client.SendMessage("Hello, World!");
 
-    std::vector<std::unique_ptr<collectors::Collector>> active_collectors;
+    std::this_thread::sleep_for(std::chrono::seconds(1));
 
-    active_collectors.push_back(
-        std::make_unique<collectors::ProcStatCollector>());
+    std::cout << "\n\nsend messages: \n";
+    client.SendMessages();
 
-    active_collectors.push_back(std::make_unique<collectors::RamCollector>());
+    std::this_thread::sleep_for(std::chrono::seconds(1));
 
-    for (const auto& gpu : hw.gpus) {
-      if (gpu.vendor == platform::GpuVendor::NVIDIA) {
-        auto nvml = std::make_unique<collectors::NvmlCollector>();
-        if (nvml->Init()) {
-          active_collectors.push_back(std::move(nvml));
-        }
-      }
-    }
+    std::cout << "\n\nget responses: \n";
+    client.GetResponses();
 
-    Scheduler scheduler(config, std::move(active_collectors));
-    scheduler.Run();
+    std::this_thread::sleep_for(std::chrono::seconds(1));
 
-  } catch (const std::exception& e) {
-    std::cerr << "CRITICAL ERROR: " << e.what() << std::endl;
-    return 1;
-  }
-  return 0;
+    std::cout << "\n\ntalk: \n";
+    client.Talk();
+
+    // try {
+    //     auto config = config::ConfigLoader::LoadConfig();
+    //
+    //     platform::PlatformDetector detector;
+    //     auto hw = detector.Detect();
+    //     detector.PrintDetectedInfo(hw);
+    //
+    //     std::vector<std::unique_ptr<collectors::Collector>> active_collectors;
+    //
+    //     active_collectors.push_back(std::make_unique<collectors::ProcStatCollector>());
+    //
+    //     active_collectors.push_back(std::make_unique<collectors::RamCollector>());
+    //
+    //     for (const auto &gpu : hw.gpus) {
+    //         if (gpu.vendor == platform::GpuVendor::NVIDIA) {
+    //             auto nvml = std::make_unique<collectors::NvmlCollector>();
+    //             if (nvml->Init()) {
+    //                 active_collectors.push_back(std::move(nvml));
+    //             }
+    //         }
+    //     }
+    //
+    //     Scheduler scheduler(config, std::move(active_collectors));
+    //     scheduler.Run();
+    //
+    // } catch (const std::exception &e) {
+    //     std::cerr << "CRITICAL ERROR: " << e.what() << std::endl;
+    //     return 1;
+    // }
+    return 0;
 }

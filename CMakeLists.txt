@@ -45,12 +45,8 @@ target_link_libraries(volta_proto PRIVATE
   protobuf::libprotobuf
   gRPC::grpc++
   gRPC::grpc++_reflection
-  fmt::fmt
-  tomlplusplus::tomlplusplus
   ${CMAKE_DL_LIBS}
 )
-
-include_directories("${LOCAL_INCLUDE_DIR}/nvidia")
 
 add_subdirectory(source/agent)
 #add_subdirectory(source/server)

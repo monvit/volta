@@ -8,3 +8,5 @@ generated/
 .cache/
 compile_commands.json
 
+*.code-workspace
+

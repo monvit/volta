@@ -2,23 +2,36 @@ syntax = "proto3";
 
 import "google/protobuf/timestamp.proto";
 
-package volta.v1;
+package volta;
 
 option go_package = "server/generated/volta;volta";
 
 service VoltaCollector {
-  rpc CollectMetrics(stream MetricBatch) returns (CollectResponse);
+  // rpc CollectMetrics(stream MetricBatch) returns (CollectResponse);
+  rpc SendMessage(Message) returns (Response);
+  rpc SendMessages(stream Message) returns (Response);
+  rpc GetResponses(Message) returns (stream Response);
+  rpc Talk(stream Message) returns (stream Response);
 }
 
-message MetricBatch {
-  google.protobuf.Timestamp timestamp = 1;
-
-  string hostname = 2;
-
-  map<string, double> metrics = 3;
+message Message {
+  string message = 1;
 }
 
-message CollectResponse {
-  bool success = 1;
-  string message = 2;
+message Response {
+  string response = 1;
 }
+
+//
+// message MetricBatch {
+//   google.protobuf.Timestamp timestamp = 1;
+//
+//   string hostname = 2;
+//
+//   map<string, double> metrics = 3;
+// }
+//
+// message CollectResponse {
+//   bool success = 1;
+//   string message = 2;
+// }

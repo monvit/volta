@@ -6,3 +6,6 @@ proto-go:
 
 server:
 	cd source/server && go build
+
+server-run:
+	cd source/server && go run main.go
