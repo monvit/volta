@@ -13,7 +13,8 @@
 namespace volta {
 namespace agent {
 namespace config {
-
+// TODO: Metrics and Collector names into something that can be read with a
+// string
 namespace CollectorNames {
 // CPU
 static constexpr char const* kProcStat = "proc_stat";
@@ -48,6 +49,7 @@ struct Config {
     CPU_ZERO(&set);
 
     if (sched_getaffinity(0, sizeof(set), &set) != 0) {
+      // TODO: Log
       perror("sched_getaffinity");
       return;
     }
@@ -67,12 +69,16 @@ struct Config {
   static inline cpu_set_t kDefaultAffinity = [] {
     cpu_set_t mask;
     CPU_ZERO(&mask);
-    unsigned int n_cpus = std::thread::hardware_concurrency();
-    for (unsigned int i = 0; i < n_cpus; ++i) {
+    long n_cpus = sysconf(_SC_NPROCESSORS_ONLN);
+    n_cpus = std::min(n_cpus, static_cast<long>(CPU_SETSIZE));
+    // TODO: Handle sysconf error
+    for (long i = 0; i < n_cpus; ++i) {
       CPU_SET(i, &mask);
     }
     return mask;
   }();
+
+  std::string uuid = "";
 
   std::chrono::milliseconds collection_interval =
       std::chrono::milliseconds(kDefaultIntervalMs);

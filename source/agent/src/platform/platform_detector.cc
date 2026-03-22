@@ -5,9 +5,7 @@
 #include <cstring>
 #include <fstream>
 #include <iostream>
-#include <regex>
 #include <string>
-#include <string_view>
 
 #ifdef HAVE_NVML
 #include <nvml.h>
