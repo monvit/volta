@@ -7,31 +7,22 @@ package volta;
 option go_package = "server/generated/volta;volta";
 
 service VoltaCollector {
-  // rpc CollectMetrics(stream MetricBatch) returns (CollectResponse);
-  rpc SendMessage(Message) returns (Response);
-  rpc SendMessages(stream Message) returns (Response);
-  rpc GetResponses(Message) returns (stream Response);
-  rpc Talk(stream Message) returns (stream Response);
+  // Bidirectional streaming RPC that remains open for the lifetime of the connection.
+  // Exchanges control messages between the server and the agent.
+  // Primarily used for server requests that instruct the agent to send data.
+  rpc Connect(stream ControlMessage) returns (stream ControlMessage);
 }
 
-message Message {
-  string message = 1;
+message ControlMessage {
+    MessageType type = 1;
+    string payload = 2;
 }
 
-message Response {
-  string response = 1;
+enum MessageType {
+    UNKNOWN = 0;
+    SEND_DATA = 1;
+    OK = 2;
+    ERROR = 3;
+    PING = 4;
+    PONG = 5;
 }
-
-//
-// message MetricBatch {
-//   google.protobuf.Timestamp timestamp = 1;
-//
-//   string hostname = 2;
-//
-//   map<string, double> metrics = 3;
-// }
-//
-// message CollectResponse {
-//   bool success = 1;
-//   string message = 2;
-// }

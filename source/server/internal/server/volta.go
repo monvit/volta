@@ -1,8 +1,6 @@
 package server
 
 import (
-	"context"
-	"fmt"
 	"io"
 	"log"
 	"strconv"
@@ -12,72 +10,61 @@ import (
 
 type VoltaCollectorServer struct {
 	pb.UnimplementedVoltaCollectorServer
-	mu sync.Mutex
+	mu             sync.Mutex
+	messagesToSend chan *pb.ControlMessage
 }
 
-func (s *VoltaCollectorServer) SendMessage(ctx context.Context, request *pb.Message) (*pb.Response, error) {
-	log.Printf("Request: %s", request.Message)
-	response := pb.Response{}
-	if request.Message == "Hello, World!" {
-		response.Response = "Hello!"
-	} else {
-		response.Response = "Who's there?"
+func (s *VoltaCollectorServer) Connect(stream pb.VoltaCollector_ConnectServer) error {
+	log.Printf("New connection created.")
+
+	for i := range 10 {
+		var msg pb.ControlMessage
+		msg.Type = pb.MessageType_SEND_DATA
+		msg.Payload = "message: " + strconv.FormatInt(int64(i), 10)
+		s.messagesToSend <- &msg
 	}
 
-	return &response, nil
+	var wg sync.WaitGroup
+	wg.Add(2)
+
+	go s.read(stream, &wg)
+	go s.write(stream, &wg)
+
+	wg.Wait()
+
+	return nil
 }
 
-func (s *VoltaCollectorServer) SendMessages(stream pb.VoltaCollector_SendMessagesServer) error {
-	var count int
+func (s *VoltaCollectorServer) read(stream pb.VoltaCollector_ConnectServer, wg *sync.WaitGroup) error {
+	defer wg.Done()
 	for {
-		message, err := stream.Recv()
+		msg, err := stream.Recv()
 		if err == io.EOF {
-			var response pb.Response
-			response.Response = "got " + strconv.Itoa(count) + " messages"
-			return stream.SendAndClose(&response)
+			log.Println("[READ]: Stream closed")
+			return nil
 		}
-
 		if err != nil {
+			log.Printf("[READ]: Error while reading: %v\n\n", err.Error())
 			return err
 		}
 
-		count++
-
-		fmt.Println(message.Message)
+		log.Printf("[READ]: Received message: %v\n", msg)
 	}
 }
 
-func (s *VoltaCollectorServer) GetResponses(message *pb.Message, stream pb.VoltaCollector_GetResponsesServer) error {
-	fmt.Println(message.Message)
-
-	for i := range 10 {
-		var response pb.Response
-		response.Response = strconv.Itoa(i)
-		err := stream.Send(&response)
-
+func (s *VoltaCollectorServer) write(stream pb.VoltaCollector_ConnectServer, wg *sync.WaitGroup) error {
+	defer wg.Done()
+	for msg := range s.messagesToSend {
+		err := stream.Send(msg)
+		if err == io.EOF {
+			log.Println("[WRITE]: Stream closed")
+			return nil
+		}
 		if err != nil {
+			log.Printf("[WRITE] Error while writing: %v", err.Error())
 			return err
 		}
 	}
 
 	return nil
-}
-
-func (s *VoltaCollectorServer) Talk(stream pb.VoltaCollector_TalkServer) error {
-	var count int
-	for {
-		msg, err := stream.Recv()
-		if err != nil {
-			return err
-		}
-		fmt.Println(msg)
-		count++
-		var response pb.Response
-		response.Response = "response " + strconv.Itoa(count)
-		err = stream.Send(&response)
-
-		if err != nil {
-			return err
-		}
-	}
 }

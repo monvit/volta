@@ -18,13 +18,17 @@ const (
 	PORT_DEFAULT = 5000
 	PORT_MIN     = 0
 	PORT_MAX     = 65535
-	SYS_CONF     = "/etc/volta/server.conf"
-	LOCAL_CONF   = "server.conf"
-	ENV_FILE     = ".env"
+
+	BUFSIZE_DEFAULT = 128
+
+	SYS_CONF   = "/etc/volta/server.conf"
+	LOCAL_CONF = "server.conf"
+	ENV_FILE   = ".env"
 )
 
 type Config struct {
-	ServerPort int `koanf:"port"`
+	ServerPort uint `koanf:"port"`
+	BufferSize uint `koanf:"bufsize"`
 }
 
 func Load() (*Config, error) {
@@ -55,7 +59,8 @@ func Load() (*Config, error) {
 
 	// flags
 	f := flag.NewFlagSet("config", flag.ContinueOnError)
-	f.Int("port", PORT_DEFAULT, "server port")
+	f.Uint("port", PORT_DEFAULT, "server port")
+	f.Uint("bufsize", BUFSIZE_DEFAULT, "size of control messages buffer size")
 
 	if err := f.Parse(os.Args[1:]); err != nil {
 		return nil, fmt.Errorf("flags: %w", err)
@@ -71,7 +76,7 @@ func Load() (*Config, error) {
 	}
 
 	// validation
-	if cfg.ServerPort < PORT_MIN || cfg.ServerPort > PORT_MAX {
+	if cfg.ServerPort > PORT_MAX {
 		return nil, fmt.Errorf("invalid port: %d, should be <%d, %d>", cfg.ServerPort, PORT_MIN, PORT_MAX)
 	}
 

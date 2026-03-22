@@ -21,23 +21,11 @@ int main() {
     auto channel = client::VoltaCollectorClient::CreateChannel("localhost:5000");
     client::VoltaCollectorClient client(channel);
 
-    std::cout << "\n\nsend message: \n";
-    client.SendMessage("Hello, World!");
+    std::thread t([&client]() {
+        client.Connect();
+    });
 
-    std::this_thread::sleep_for(std::chrono::seconds(1));
-
-    std::cout << "\n\nsend messages: \n";
-    client.SendMessages();
-
-    std::this_thread::sleep_for(std::chrono::seconds(1));
-
-    std::cout << "\n\nget responses: \n";
-    client.GetResponses();
-
-    std::this_thread::sleep_for(std::chrono::seconds(1));
-
-    std::cout << "\n\ntalk: \n";
-    client.Talk();
+    t.join();
 
     // try {
     //     auto config = config::ConfigLoader::LoadConfig();

@@ -16,10 +16,11 @@ class VoltaCollectorClient {
 
     static std::shared_ptr<grpc::Channel> CreateChannel(const std::string &host);
 
-    void SendMessage(const std::string &message);
-    void SendMessages();
-    void GetResponses();
-    void Talk();
+    // void SendMessage(const std::string &message);
+    // void SendMessages();
+    // void GetResponses();
+    // void Talk();
+    void Connect();
 
   private:
     std::unique_ptr<VoltaCollector::Stub> stub_;
