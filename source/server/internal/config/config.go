@@ -19,7 +19,7 @@ const (
 	PORT_MIN     = 0
 	PORT_MAX     = 65535
 
-	BUFSIZE_DEFAULT = 128
+	BUFSIZE_DEFAULT = 16
 
 	SYS_CONF   = "/etc/volta/server.conf"
 	LOCAL_CONF = "server.conf"
@@ -60,7 +60,7 @@ func Load() (*Config, error) {
 	// flags
 	f := flag.NewFlagSet("config", flag.ContinueOnError)
 	f.Uint("port", PORT_DEFAULT, "server port")
-	f.Uint("bufsize", BUFSIZE_DEFAULT, "size of control messages buffer size")
+	f.Uint("bufsize", BUFSIZE_DEFAULT, "buffer size of each connection")
 
 	if err := f.Parse(os.Args[1:]); err != nil {
 		return nil, fmt.Errorf("flags: %w", err)

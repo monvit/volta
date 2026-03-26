@@ -17,9 +17,7 @@ func Run(cfg *config.Config) error {
 
 	var opts []grpc.ServerOption
 	grpcServer := grpc.NewServer(opts...)
-	server := &VoltaCollectorServer{
-		messagesToSend: make(chan *pb.ControlMessage, cfg.BufferSize),
-	}
+	server := &VoltaCollectorServer{}
 	pb.RegisterVoltaCollectorServer(grpcServer, server)
 
 	if err := grpcServer.Serve(lis); err != nil {

@@ -1,36 +1,70 @@
 package server
 
 import (
+	"fmt"
 	"io"
 	"log"
-	"strconv"
+	"maps"
+	"slices"
 	"sync"
 	pb "volta/server/generated/volta"
+	cfg "volta/server/internal/config"
+
+	"google.golang.org/grpc/peer"
 )
+
+type Client struct {
+	stream *pb.VoltaCollector_ConnectServer
+	ch     chan *pb.ControlMessage
+}
 
 type VoltaCollectorServer struct {
 	pb.UnimplementedVoltaCollectorServer
-	mu             sync.Mutex
-	messagesToSend chan *pb.ControlMessage
+
+	mu      sync.Mutex
+	clients map[string]*Client
 }
 
 func (s *VoltaCollectorServer) Connect(stream pb.VoltaCollector_ConnectServer) error {
-	log.Printf("New connection created.")
+	p, ok := peer.FromContext(stream.Context())
+	if !ok {
+		return fmt.Errorf("no peer info available")
+	}
 
-	for i := range 10 {
-		var msg pb.ControlMessage
-		msg.Type = pb.MessageType_SEND_DATA
-		msg.Payload = "message: " + strconv.FormatInt(int64(i), 10)
-		s.messagesToSend <- &msg
+	log.Printf("New connection from %v created.", p.Addr.String())
+
+	ch := make(chan *pb.ControlMessage, cfg.BUFSIZE_DEFAULT)
+
+	// TODO: better key
+	s.clients[p.Addr.String()] = &Client{
+		stream: &stream,
+		ch:     ch,
 	}
 
 	var wg sync.WaitGroup
-	wg.Add(2)
 
 	go s.read(stream, &wg)
-	go s.write(stream, &wg)
+	go s.write(stream, ch, &wg)
 
 	wg.Wait()
+
+	return nil
+}
+
+func (s *VoltaCollectorServer) Clients() []string {
+	return slices.Collect(maps.Keys(s.clients))
+}
+
+func (s *VoltaCollectorServer) RequestDataFromClient(clientKey string) error {
+	client, ok := s.clients[clientKey]
+	if !ok {
+		return fmt.Errorf("client with given key %v doesn't exists", clientKey)
+	}
+
+	client.ch <- &pb.ControlMessage{
+		Type:    pb.MessageType_SEND_DATA,
+		Payload: "",
+	}
 
 	return nil
 }
@@ -52,9 +86,9 @@ func (s *VoltaCollectorServer) read(stream pb.VoltaCollector_ConnectServer, wg *
 	}
 }
 
-func (s *VoltaCollectorServer) write(stream pb.VoltaCollector_ConnectServer, wg *sync.WaitGroup) error {
+func (s *VoltaCollectorServer) write(stream pb.VoltaCollector_ConnectServer, ch chan *pb.ControlMessage, wg *sync.WaitGroup) error {
 	defer wg.Done()
-	for msg := range s.messagesToSend {
+	for msg := range ch {
 		err := stream.Send(msg)
 		if err == io.EOF {
 			log.Println("[WRITE]: Stream closed")

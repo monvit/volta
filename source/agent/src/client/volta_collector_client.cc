@@ -1,20 +1,23 @@
 #include "volta_collector_client.h"
-#include "reader_writer.h"
 
 #include <grpcpp/channel.h>
 #include <grpcpp/client_context.h>
 #include <grpcpp/create_channel.h>
 #include <grpcpp/security/credentials.h>
+
+#include <chrono>
 #include <iostream>
 #include <thread>
-#include <chrono>
+
+#include "reader_writer.h"
 
 namespace volta {
 namespace agent {
 namespace client {
 
-std::shared_ptr<grpc::Channel> VoltaCollectorClient::CreateChannel(const std::string &host) {
-    return grpc::CreateChannel(host, grpc::InsecureChannelCredentials());
+std::shared_ptr<grpc::Channel> VoltaCollectorClient::CreateChannel(
+    const std::string& host) {
+  return grpc::CreateChannel(host, grpc::InsecureChannelCredentials());
 }
 
 // void VoltaCollectorClient::SendMessage(const std::string &message) {
@@ -32,7 +35,8 @@ std::shared_ptr<grpc::Channel> VoltaCollectorClient::CreateChannel(const std::st
 //     grpc::ClientContext context;
 //     ::volta::Response response;
 
-//     std::unique_ptr<grpc::ClientWriter<::volta::Message>> writer(stub_->SendMessages(&context, &response));
+//     std::unique_ptr<grpc::ClientWriter<::volta::Message>>
+//     writer(stub_->SendMessages(&context, &response));
 
 //     for (int i = 0; i < 10; i++) {
 //         ::volta::Message msg;
@@ -63,7 +67,8 @@ std::shared_ptr<grpc::Channel> VoltaCollectorClient::CreateChannel(const std::st
 //     ::volta::Message message;
 //     message.set_message("Gimme responses :)");
 
-//     std::unique_ptr<grpc::ClientReader<::volta::Response>> reader(stub_->GetResponses(&context, message));
+//     std::unique_ptr<grpc::ClientReader<::volta::Response>>
+//     reader(stub_->GetResponses(&context, message));
 
 //     ::volta::Response response;
 //     while(reader->Read(&response)) {
@@ -82,7 +87,8 @@ std::shared_ptr<grpc::Channel> VoltaCollectorClient::CreateChannel(const std::st
 // void VoltaCollectorClient::Talk() {
 //     grpc::ClientContext context;
 
-//     std::shared_ptr<grpc::ClientReaderWriter<::volta::Message, ::volta::Response>> rw(stub_->Talk(&context));
+//     std::shared_ptr<grpc::ClientReaderWriter<::volta::Message,
+//     ::volta::Response>> rw(stub_->Talk(&context));
 
 //     std::thread writeThread([rw]() {
 //         std::vector<std::string> messages {
@@ -120,25 +126,24 @@ std::shared_ptr<grpc::Channel> VoltaCollectorClient::CreateChannel(const std::st
 
 //     if (!status.ok()) {
 //         std::cout << "client server stream rpc FAILED" << std::endl;
-//         std::cout << status.error_message() << " " << status.error_code() << std::endl;
-//         return;
+//         std::cout << status.error_message() << " " << status.error_code() <<
+//         std::endl; return;
 //     }
 // }
 
 void VoltaCollectorClient::Connect() {
-    ReaderWriter stream(stub_.get());
-    grpc::Status status = stream.Await();
+  ReaderWriter stream(get());
+  grpc::Status status = stream.Await();
 
-    if (!status.ok()) {
-        std::cerr << "Stream finished with error: "
-                << status.error_code() << " "
-                << status.error_message() << " " 
-                << status.error_details() << std::endl;
-    } else {
-        std::cout << "Stream finished successfully" << std::endl;
-    }
+  if (!status.ok()) {
+    std::cerr << "Stream finished with error: " << status.error_code() << " "
+              << status.error_message() << " " << status.error_details()
+              << std::endl;
+  } else {
+    std::cout << "Stream finished successfully" << std::endl;
+  }
 }
 
-} // namespace client
-} // namespace agent
-} // namespace volta
+}  // namespace client
+}  // namespace agent
+}  // namespace volta
