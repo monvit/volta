@@ -13,15 +13,19 @@ class RaplCollector : public Collector {
   // ~RaplCollector() override;
 
   std::vector<Metric> Collect() override;
-
+  ~RaplCollector();
  private:
-  uint64_t ReadMSR(uint32_t offset);
-  int OpenMSR(uint8_t core);
+  uint64_t ReadMSR(uint8_t core, uint32_t offset);
+  void OpenMSR();
   void CloseMSR(int fd);
   bool initialized_ = false;
   double power_units_, energy_units_, time_units_;
-
+  std::vector<int> MSR_files_;
   double last_value;
+
+  class MSR_Read_Exception : std::exception {};
+  class MSR_Open_Exception : std::exception {};
+
   struct MSR_RAPL {
     static constexpr uint32_t POWER_UNIT = 0x606;
     struct Units {
