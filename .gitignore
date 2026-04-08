@@ -7,3 +7,7 @@ bin/
 .cache/
 compile_commands.json
 
+source/server/generated
+*.code-workspace
+
+.clang-format
