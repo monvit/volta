@@ -44,7 +44,7 @@ int main() {
     scheduler.Run();
 
   } catch (const std::exception& e) {
-    std::cerr << "CRITICAL ERROR: " << e.what() << std::endl;
+    // std::cerr << "CRITICAL ERROR: " << e.what() << std::endl;
     return 1;
   }
   return 0;
