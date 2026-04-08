@@ -14,6 +14,7 @@ class RaplCollector : public Collector {
 
   std::vector<Metric> Collect() override;
   ~RaplCollector();
+
  private:
   uint64_t ReadMSR(uint8_t core, uint32_t offset);
   void OpenMSR();

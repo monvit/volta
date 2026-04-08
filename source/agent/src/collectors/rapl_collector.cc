@@ -1,12 +1,12 @@
 #include "rapl_collector.h"
 
-#include <algorithm>
 #include <fcntl.h>
-#include <filesystem>
 #include <unistd.h>
 
+#include <algorithm>
 #include <chrono>
 #include <cmath>
+#include <filesystem>
 
 namespace volta {
 namespace agent {
@@ -66,12 +66,10 @@ void RaplCollector::OpenMSR() {
   }
 
   for (const auto &entry : std::filesystem::directory_iterator(cpu_base)) {
-    if (!entry.is_directory())
-      continue;
+    if (!entry.is_directory()) continue;
 
     const auto &dirname = entry.path().filename().string();
-    if (!std::ranges::all_of(dirname, ::isdigit))
-      continue;
+    if (!std::ranges::all_of(dirname, ::isdigit)) continue;
 
     int fd = open((entry.path() / "msr").c_str(), O_RDONLY);
     if (fd >= 0) {
@@ -87,6 +85,6 @@ RaplCollector::~RaplCollector() {
     CloseMSR(file);
   }
 };
-} // namespace collectors
-} // namespace agent
-} // namespace volta
+}  // namespace collectors
+}  // namespace agent
+}  // namespace volta
