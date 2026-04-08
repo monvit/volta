@@ -50,8 +50,7 @@ void Scheduler::PrintDashboard(const std::vector<Metric>& metrics) {
 
   std::cout << "-----------------------------------------------\n";
   std::cout << "Data points collected: " << metrics.size() << "\n";
-  std::cout << "Press Ctrl+C to exit."
-            << "\n";
+  std::cout << "Press Ctrl+C to exit." << "\n";
   std::cout.flush();
 }
 
