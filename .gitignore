@@ -3,3 +3,8 @@
 build/
 bin/
 .cache/
+
+CMakeFiles/
+CMakeCache.txt
+
+vcpkg_installed/
