@@ -4,20 +4,20 @@ on:
   push:
     branches: [ "main", "devel" ]
     paths:
-      - 'source/agent/**'
-      - 'libs/**'
-      - 'CMakeLists.txt'
-      - 'vcpkg.json'
-      - 'CMakePresets.json'
+      - 'sources/agent/src/**'
+      - 'sources/agent/libs/**'
+      - 'sources/agent/CMakeLists.txt'
+      - 'sources/agent/vcpkg.json'
+      - 'sources/agent/CMakePresets.json'
       - '.github/workflows/agent_ci.yml'
   pull_request:
     branches: [ "main", "devel" ]
     paths:
-      - 'source/agent/**'
-      - 'libs/**'
-      - 'CMakeLists.txt'
-      - 'vcpkg.json'
-      - 'CMakePresets.json'
+      - 'sources/agent/src/**'
+      - 'sources/agent/libs/**'
+      - 'sources/agent/CMakeLists.txt'
+      - 'sources/agent/vcpkg.json'
+      - 'sources/agent/CMakePresets.json'
       - '.github/workflows/agent_ci.yml'
 
 jobs:
@@ -40,16 +40,18 @@ jobs:
     - name: Setup vcpkg
       uses: lukka/run-vcpkg@v11
       with:
-        vcpkgJsonGlob: 'vcpkg.json'
+        vcpkgJsonGlob: 'sources/agent/vcpkg.json'
 
     - name: Check Code Formatting
       run: |
-        find source/agent -name "*.cc" -o -name "*.h" | xargs clang-format --dry-run --Werror -style=Google
+        find sources/agent -name "*.cc" -o -name "*.h" | xargs clang-format --dry-run --Werror -style=Google
 
     - name: CMake Configure
+      working-directory: sources/agent
       run: cmake --preset default
 
     - name: Build
+      working-directory: sources/agent
       run: cmake --build --preset default
 
     - name: Analyze Logic
@@ -60,4 +62,4 @@ jobs:
         --inline-suppr \
         --force \
         -i build \
-        source/agent
+        sources/agent
