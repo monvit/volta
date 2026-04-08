@@ -1,9 +1,7 @@
 #ifndef VOLTA_AGENT_PLATFORM_PLATFORM_DETECTOR_H_
 #define VOLTA_AGENT_PLATFORM_PLATFORM_DETECTOR_H_
 
-#include <cstdint>
 #include <string>
-#include <vector>
 
 #include "platform/hardware_info.h"
 

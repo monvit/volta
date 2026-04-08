@@ -4,9 +4,11 @@ on:
   push:
     branches: [ "main", "devel" ]
     paths:
-      - 'source/agent/**'      # If changes are in the agent source code
-      - 'libs/**'              # If changes are in libraries (proto, NVIDIA headers)
-      - 'CMakeLists.txt'       # If changes are in main CMake (affects everything)
+      - 'source/agent/**'
+      - 'libs/**'
+      - 'CMakeLists.txt'
+      - 'vcpkg.json'
+      - 'CMakePresets.json'
       - '.github/workflows/agent_ci.yml'
   pull_request:
     branches: [ "main", "devel" ]
@@ -14,6 +16,8 @@ on:
       - 'source/agent/**'
       - 'libs/**'
       - 'CMakeLists.txt'
+      - 'vcpkg.json'
+      - 'CMakePresets.json'
       - '.github/workflows/agent_ci.yml'
 
 jobs:
@@ -21,25 +25,32 @@ jobs:
     name: Build & Format Check
     runs-on: ubuntu-latest
 
+    env:
+      VCPKG_BINARY_SOURCES: "clear;x-gha,readwrite"
+
     steps:
     - uses: actions/checkout@v4
 
-    - name: Install dependencies
+
+    - name: Install build tools
       run: |
         sudo apt-get update
-        sudo apt-get install -y build-essential cmake \
-        libgrpc++-dev libprotobuf-dev protobuf-compiler-grpc \
-        libabsl-dev clang-format cppcheck
+        sudo apt-get install -y build-essential cmake clang-format cppcheck
+
+    - name: Setup vcpkg
+      uses: lukka/run-vcpkg@v11
+      with:
+        vcpkgJsonGlob: 'vcpkg.json'
 
     - name: Check Code Formatting
       run: |
         find source/agent -name "*.cc" -o -name "*.h" | xargs clang-format --dry-run --Werror -style=Google
 
     - name: CMake Configure
-      run: cmake -B build -S .
+      run: cmake --preset default
 
     - name: Build
-      run: cmake --build build --parallel $(nproc)
+      run: cmake --build --preset default
 
     - name: Analyze Logic
       run: |
@@ -48,5 +59,5 @@ jobs:
         --suppress=missingIncludeSystem \
         --inline-suppr \
         --force \
-        -i build -i libs \
+        -i build \
         source/agent

@@ -1,6 +1,7 @@
 .vscode/
 
 build/
+out/
 bin/
 .cache/
 
@@ -8,3 +9,7 @@ CMakeFiles/
 CMakeCache.txt
 
 vcpkg_installed/
+
+.cache/
+compile_commands.json
+
