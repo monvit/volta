@@ -2,7 +2,7 @@ name: Agent CI
 
 on:
   push:
-    branches: [ "main", "devel", "test/workflow" ]
+    branches: [ "main", "devel" ]
     paths:
       - 'sources/agent/'
       - '.github/workflows/agent_ci.yml'
