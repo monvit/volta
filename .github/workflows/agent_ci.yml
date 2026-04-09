@@ -2,22 +2,14 @@ name: Agent CI
 
 on:
   push:
-    branches: [ "main", "devel" ]
+    branches: [ "main", "devel", "test/workflow" ]
     paths:
-      - 'sources/agent/src/**'
-      - 'sources/agent/libs/**'
-      - 'sources/agent/CMakeLists.txt'
-      - 'sources/agent/vcpkg.json'
-      - 'sources/agent/CMakePresets.json'
+      - 'sources/agent/'
       - '.github/workflows/agent_ci.yml'
   pull_request:
     branches: [ "main", "devel" ]
     paths:
-      - 'sources/agent/src/**'
-      - 'sources/agent/libs/**'
-      - 'sources/agent/CMakeLists.txt'
-      - 'sources/agent/vcpkg.json'
-      - 'sources/agent/CMakePresets.json'
+      - 'sources/agent/'
       - '.github/workflows/agent_ci.yml'
 
 jobs:
@@ -31,11 +23,19 @@ jobs:
     steps:
     - uses: actions/checkout@v4
 
+    - name: Setup C++ tools
+      uses: aminya/setup-cpp@v1
+      with:
+        clang-format: true
+        cppcheck: true
 
-    - name: Install build tools
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y build-essential cmake clang-format cppcheck
+    - name: Cache vcpkg
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.cache/vcpkg
+          sources/agent/build/vcpkg_installed
+        key: vcpkg-${{ runner.os }}-${{ hashFiles('sources/agent/vcpkg.json') }}
 
     - name: Setup vcpkg
       uses: lukka/run-vcpkg@v11
@@ -44,15 +44,15 @@ jobs:
 
     - name: Check Code Formatting
       run: |
-        find sources/agent -name "*.cc" -o -name "*.h" | xargs clang-format --dry-run --Werror -style=Google
+        find sources/agent/src -name "*.cc" -o -name "*.h" | xargs clang-format --dry-run --Werror -style=Google
 
     - name: CMake Configure
       working-directory: sources/agent
-      run: cmake --preset default
+      run: cmake --preset default -DCMAKE_BUILD_TYPE=Release
 
     - name: Build
       working-directory: sources/agent
-      run: cmake --build --preset default
+      run: cmake --build --preset default -j$(nproc)
 
     - name: Analyze Logic
       run: |
@@ -61,5 +61,5 @@ jobs:
         --suppress=missingIncludeSystem \
         --inline-suppr \
         --force \
-        -i build \
+        -i sources/agent/build \
         sources/agent
