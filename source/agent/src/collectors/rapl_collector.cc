@@ -27,7 +27,7 @@ std::vector<Metric> RaplCollector::Collect() {
 
   try {
     readout = ReadMSR(0, MSR_RAPL::PKG::ENERGY_STATUS);
-  } catch (MSR_Read_Exception) {
+  } catch (const MSR_Read_Exception& e) {
     return {};
   }
 
