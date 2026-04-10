@@ -3,7 +3,6 @@
 *.code-workspace
 
 # --- Agent ---
-build/
 .cache/
 compile_commands.json
 sources/agent/agent.conf

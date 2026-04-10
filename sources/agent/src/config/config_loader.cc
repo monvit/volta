@@ -56,6 +56,11 @@ Config ConfigLoader::LoadDefaultConfig() {
   proc_stat_config.metrics["cpu_usage_percent"] = true;
   config.collectors[CollectorNames::kProcStat] = proc_stat_config;
 
+  CollectorConfig rapl_collector;
+  rapl_collector.enabled = true;
+  rapl_collector.metrics = {{"cpu_energy_usage_total", true}};
+  config.collectors[CollectorNames::kRapl] = rapl_collector;
+
   return config;
 }
 
