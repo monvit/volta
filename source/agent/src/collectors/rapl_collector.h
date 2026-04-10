@@ -11,8 +11,8 @@ class RaplCollector : public Collector {
  public:
   RaplCollector();
   // ~RaplCollector() override;
-RaplCollector(const RaplCollector&) = delete;
-RaplCollector& operator=(const RaplCollector&) = delete;
+  RaplCollector(const RaplCollector&) = delete;
+  RaplCollector& operator=(const RaplCollector&) = delete;
   std::vector<Metric> Collect() override;
   ~RaplCollector();
 

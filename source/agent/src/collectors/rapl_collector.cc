@@ -27,7 +27,7 @@ std::vector<Metric> RaplCollector::Collect() {
 
   try {
     readout = ReadMSR(0, MSR_RAPL::PKG::ENERGY_STATUS);
-  } catch (const MSR_Read_Exception& e) {
+  } catch (const MSR_Read_Exception &e) {
     return {};
   }
 
@@ -64,14 +64,18 @@ void RaplCollector::OpenMSR() {
   if (!std::filesystem::exists(cpu_base, ec)) {
     throw MSR_Open_Exception();
   }
-
+  std::vector<std::pair<int, std::filesystem::path>> cpu_entries;
   for (const auto &entry : std::filesystem::directory_iterator(cpu_base)) {
     if (!entry.is_directory()) continue;
-
     const auto &dirname = entry.path().filename().string();
     if (!std::ranges::all_of(dirname, ::isdigit)) continue;
+    cpu_entries.emplace_back(std::stoi(dirname), entry.path());
+  }
 
-    int fd = open((entry.path() / "msr").c_str(), O_RDONLY);
+  std::ranges::sort(cpu_entries);
+
+  for (const auto &[id, path] : cpu_entries) {
+    int fd = open((path / "msr").c_str(), O_RDONLY);
     if (fd >= 0) {
       MSR_files_.push_back(fd);
     }
