@@ -1,0 +1,23 @@
+#!/bin/bash
+
+REPO_ROOT=$(git rev-parse --show-toplevel)
+BUILD_DIR="$REPO_ROOT/sources/agent/build"
+
+if [ ! -d "$BUILD_DIR" ]; then
+    echo "Build directory not found: $BUILD_DIR"
+    echo "Run cmake --preset debug in sources/agent first."
+    exit 1
+fi
+
+# Sprawdź tylko pliki staged do commita
+STAGED=$(git diff --cached --name-only --diff-filter=ACM | grep -E '\.(cc|h)$')
+
+if [ -z "$STAGED" ]; then
+    exit 0
+fi
+
+cmake --build "$BUILD_DIR" --target check-format
+if [ $? -ne 0 ]; then
+    echo "Formatting errors found. Run 'cmake --build $BUILD_DIR --target format' to fix."
+    exit 1
+fi
