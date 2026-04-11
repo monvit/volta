@@ -1,12 +1,13 @@
+# --- Shared ---
 .vscode/
-
-build/
-out/
-bin/
-generated/
-
-.cache/
-compile_commands.json
-
 *.code-workspace
 
+# --- Agent ---
+build/
+.cache/
+compile_commands.json
+sources/agent/agent.conf
+.clang-format
+
+# --- Server ---
+sources/server/generated/
