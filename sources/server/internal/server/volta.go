@@ -3,12 +3,13 @@ package server
 import (
 	"fmt"
 	"io"
-	"log"
 	"maps"
 	"slices"
 	"sync"
-	pb "volta/server/generated/volta"
-	cfg "volta/server/internal/config"
+
+	cfg "github.com/monvit/volta/sources/server/internal/config"
+	log "github.com/monvit/volta/sources/server/internal/logger"
+	pb "github.com/monvit/volta/sources/server/pb"
 
 	"google.golang.org/grpc/peer"
 )
@@ -31,17 +32,20 @@ func (s *VoltaCollectorServer) Connect(stream pb.VoltaCollector_ConnectServer) e
 		return fmt.Errorf("no peer info available")
 	}
 
-	log.Printf("New connection from %v created.", p.Addr.String())
+	log.Debug("new connection from %v created.", p.Addr.String())
 
 	ch := make(chan *pb.ControlMessage, cfg.BUFSIZE_DEFAULT)
 
 	// TODO: better key
+	s.mu.Lock()
 	s.clients[p.Addr.String()] = &Client{
 		stream: &stream,
 		ch:     ch,
 	}
+	s.mu.Unlock()
 
 	var wg sync.WaitGroup
+	wg.Add(2)
 
 	go s.read(stream, &wg)
 	go s.write(stream, ch, &wg)
@@ -74,15 +78,16 @@ func (s *VoltaCollectorServer) read(stream pb.VoltaCollector_ConnectServer, wg *
 	for {
 		msg, err := stream.Recv()
 		if err == io.EOF {
-			log.Println("[READ]: Stream closed")
+			log.Info("read stream closed")
 			return nil
 		}
+
 		if err != nil {
-			log.Printf("[READ]: Error while reading: %v\n\n", err.Error())
+			log.Error("error while reading: %v\n\n", err.Error())
 			return err
 		}
 
-		log.Printf("[READ]: Received message: %v\n", msg)
+		log.Debug("received message: %v\n", msg)
 	}
 }
 
@@ -91,11 +96,12 @@ func (s *VoltaCollectorServer) write(stream pb.VoltaCollector_ConnectServer, ch 
 	for msg := range ch {
 		err := stream.Send(msg)
 		if err == io.EOF {
-			log.Println("[WRITE]: Stream closed")
+			log.Info("write stream closed")
 			return nil
 		}
+
 		if err != nil {
-			log.Printf("[WRITE] Error while writing: %v", err.Error())
+			log.Error("error while writing: %v", err.Error())
 			return err
 		}
 	}

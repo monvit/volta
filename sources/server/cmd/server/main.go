@@ -4,28 +4,44 @@ import (
 	"fmt"
 	"os"
 	"sync"
-	config "volta/server/internal/config"
-	server "volta/server/internal/server"
+
+	config "github.com/monvit/volta/sources/server/internal/config"
+	log "github.com/monvit/volta/sources/server/internal/logger"
+	server "github.com/monvit/volta/sources/server/internal/server"
 )
 
 func main() {
-	cfg, err := config.Load()
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "%v\n", err)
-
-		if cfg == nil {
-			os.Exit(1)
-		}
+	// logger
+	if err := log.Init(); err != nil {
+		fmt.Print(err)
+		os.Exit(1)
 	}
 
+	// config
+	result, err := config.Load()
+	if err != nil {
+		log.Error("config: %v", err)
+		os.Exit(1)
+	}
+	for _, w := range result.Warnings {
+		log.Warn("config: %v", w)
+	}
+
+	cfg := result.Config
+
+	was_err := false
 	var wg sync.WaitGroup
 
 	wg.Go(func() {
 		if err := server.Run(cfg); err != nil {
-			fmt.Fprintf(os.Stderr, "server error: %v\n", err)
-			os.Exit(1) // TODO: exit in main
+			log.Error("server error: %v\n", err)
+			was_err = true
 		}
 	})
 
 	wg.Wait()
+
+	if was_err {
+		os.Exit(1)
+	}
 }

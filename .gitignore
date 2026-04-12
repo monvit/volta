@@ -10,4 +10,6 @@ sources/agent/agent.conf
 .clang-format
 
 # --- Server ---
-sources/server/generated/
+sources/server/pb/
+sources/server/server
+sources/**/logs

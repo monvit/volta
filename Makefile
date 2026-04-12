@@ -1,11 +1,11 @@
 proto-go:
-	protoc -I libs/proto \
-	  --go_out=source\
-	  --go-grpc_out=source\
-	  libs/proto/volta.proto
+	protoc -I sources/proto \
+	  --go_out=sources\
+	  --go-grpc_out=sources\
+	  sources/proto/volta.proto
 
 server:
-	cd source/server && go build
+	cd sources/server/cmd/server && go build
 
 server-run:
-	cd source/server && go run main.go
+	cd sources/server && go run cmd/server/main.go

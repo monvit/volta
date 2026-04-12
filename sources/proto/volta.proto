@@ -1,10 +1,11 @@
 syntax = "proto3";
 
 import "google/protobuf/timestamp.proto";
+import "google/protobuf/duration.proto";
 
 package volta;
 
-option go_package = "server/generated/volta;volta";
+option go_package = "server/pb;pb";
 
 service VoltaCollector {
   // Bidirectional streaming RPC that remains open for the lifetime of the connection.
@@ -14,15 +15,36 @@ service VoltaCollector {
 }
 
 message ControlMessage {
-    MessageType type = 1;
-    string payload = 2;
+  MessageType type    = 1;
+  string      payload = 2;
+  oneof range {
+    RangeDuration  duration   = 3;
+    RangeTime      time       = 4;
+    uint32         count      = 5;
+    RangeCountFrom count_from = 6;
+  };
 }
 
 enum MessageType {
-    UNKNOWN = 0;
-    SEND_DATA = 1;
-    OK = 2;
-    ERROR = 3;
-    PING = 4;
-    PONG = 5;
+  UNKNOWN   = 0;
+  SEND_DATA = 1;
+  OK        = 2;
+  ERROR     = 3;
+  PING      = 4;
+  PONG      = 5;
+}
+
+message RangeDuration {
+  google.protobuf.Duration  duration = 1;
+  google.protobuf.Timestamp from     = 2;
+}
+
+message RangeTime {
+  google.protobuf.Timestamp from = 1;
+  google.protobuf.Timestamp to   = 2;
+}
+
+message RangeCountFrom {
+  uint64                    count = 1;
+  google.protobuf.Timestamp from  = 2;
 }

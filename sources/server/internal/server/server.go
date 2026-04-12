@@ -3,8 +3,10 @@ package server
 import (
 	"fmt"
 	"net"
-	pb "volta/server/generated/volta"
-	config "volta/server/internal/config"
+
+	pb "github.com/monvit/volta/sources/server/pb"
+
+	config "github.com/monvit/volta/sources/server/internal/config"
 
 	"google.golang.org/grpc"
 )
@@ -17,7 +19,9 @@ func Run(cfg *config.Config) error {
 
 	var opts []grpc.ServerOption
 	grpcServer := grpc.NewServer(opts...)
-	server := &VoltaCollectorServer{}
+	server := &VoltaCollectorServer{
+		clients: make(map[string]*Client),
+	}
 	pb.RegisterVoltaCollectorServer(grpcServer, server)
 
 	if err := grpcServer.Serve(lis); err != nil {
