@@ -21,7 +21,7 @@ int main() {
   auto channel = client::VoltaCollectorClient::CreateChannel("localhost:5000");
   client::VoltaCollectorClient client(channel);
 
-  std::thread t([&client]() { client.Connect(); });
+     std::thread t([&client]() { client.Connect(); });
 
   t.join();
 

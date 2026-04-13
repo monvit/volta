@@ -16,12 +16,11 @@ service VoltaCollector {
 
 message ControlMessage {
   MessageType type    = 1;
-  string      payload = 2;
-  oneof range {
-    RangeDuration  duration   = 3;
-    RangeTime      time       = 4;
-    uint32         count      = 5;
-    RangeCountFrom count_from = 6;
+  google.protobuf.Timestamp timestamp = 2;
+  oneof request {
+    // TODO: error levels
+    string error = 3;
+    SendDataRequest send_data_request = 4;
   };
 }
 
@@ -32,6 +31,15 @@ enum MessageType {
   ERROR     = 3;
   PING      = 4;
   PONG      = 5;
+}
+
+message SendDataRequest {
+  oneof payload {
+    RangeDuration range_duration = 1;
+    RangeTime range_time = 2;
+    RangeCountFrom range_count_from = 3;
+    uint32 count = 4;
+  }
 }
 
 message RangeDuration {

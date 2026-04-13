@@ -21,6 +21,7 @@ func Run(cfg *config.Config) error {
 	grpcServer := grpc.NewServer(opts...)
 	server := &VoltaCollectorServer{
 		clients: make(map[string]*Client),
+		cfg:     cfg,
 	}
 	pb.RegisterVoltaCollectorServer(grpcServer, server)
 
