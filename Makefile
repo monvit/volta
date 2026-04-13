@@ -9,3 +9,7 @@ server:
 
 server-run:
 	cd sources/server && go run cmd/server/main.go
+
+hooks:
+	chmod +x scripts/hooks/pre-commit
+	cd scripts/hooks && ln -sfr ./pre-commit ../../.git/hooks/pre-commit
