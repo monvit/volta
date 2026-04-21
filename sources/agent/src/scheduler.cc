@@ -39,7 +39,8 @@ void Scheduler::PrintDashboard(const std::vector<Metric>& metrics) {
   std::cout << "    VOLTA AGENT v0.1 (POC) - ACTIVE MONITOR    \n";
   std::cout << "===============================================\n";
 
-  std::cout << std::left << std::setw(30) << "METRIC NAME" << "VALUE\n";
+  std::cout << std::left << std::setw(30) << "METRIC NAME"
+            << "VALUE\n";
   std::cout << "-----------------------------------------------\n";
 
   for (const auto& m : metrics) {
@@ -49,7 +50,8 @@ void Scheduler::PrintDashboard(const std::vector<Metric>& metrics) {
 
   std::cout << "-----------------------------------------------\n";
   std::cout << "Data points collected: " << metrics.size() << "\n";
-  std::cout << "Press Ctrl+C to exit." << "\n";
+  std::cout << "Press Ctrl+C to exit."
+            << "\n";
   std::cout.flush();
 }
 

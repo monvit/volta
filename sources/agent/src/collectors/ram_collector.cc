@@ -16,10 +16,13 @@ std::vector<Metric> RamCollector::Collect() {
 
   auto now = std::chrono::system_clock::now().time_since_epoch().count();
 
-  return {{"ram_total_bytes", (double)total, now},
-          {"ram_used_bytes", (double)used, now},
-          {"ram_used_percent", (double)used / total * 100.0, now}};
+  return {{MetricType::RamTotal, {.name = "ram"}, (double)total, now},
+          {MetricType::RamUsed, {.name = "ram"}, (double)used, now}};
 }
+
+std::vector<MetricType> RamCollector::Satisfiable() {
+  return {MetricType::RamTotal, MetricType::RamUsed};
+};
 
 void RamCollector::ReadStats(uint64_t& used, uint64_t& total) {
   std::ifstream file("/proc/meminfo");

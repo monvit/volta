@@ -16,6 +16,7 @@ class NvmlCollector : public Collector {
 
   bool Init() override;
   std::vector<Metric> Collect() override;
+  std::vector<MetricType> Satisfiable() override;
 
  private:
   nvmlDevice_t device_handle_;

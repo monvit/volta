@@ -10,6 +10,7 @@ namespace collectors {
 class RamCollector : public Collector {
  public:
   std::vector<Metric> Collect() override;
+  std::vector<MetricType> Satisfiable() override;
 
  private:
   void ReadStats(uint64_t& used, uint64_t& total);

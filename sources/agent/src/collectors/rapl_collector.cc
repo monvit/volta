@@ -34,14 +34,17 @@ std::vector<Metric> RaplCollector::Collect() {
   double value = energy_units_ * readout;
 
   Metric m;
-  m.name = "cpu_energy_usage_total";
+  m.type = MetricType::CpuPowerPackage;
+  m.devId = {};
   m.value = value - last_value;
-  m.timestamp = std::chrono::duration_cast<std::chrono::milliseconds>(
-                    std::chrono::system_clock::now().time_since_epoch())
-                    .count();
+  m.timestamp = std::chrono::system_clock::now().time_since_epoch().count();
   last_value = value;
   return {m};
 }
+
+std::vector<MetricType> RaplCollector::Satisfiable() {
+  return {MetricType::CpuPowerPackage};
+};
 
 uint64_t RaplCollector::ReadMSR(uint8_t core, uint32_t offset) {
   uint64_t data;
@@ -89,6 +92,7 @@ RaplCollector::~RaplCollector() {
     CloseMSR(file);
   }
 };
+
 }  // namespace collectors
 }  // namespace agent
 }  // namespace volta
