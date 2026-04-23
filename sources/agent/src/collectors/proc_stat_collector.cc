@@ -24,13 +24,18 @@ std::vector<Metric> ProcStatCollector::Collect() {
   prev_idle_ = current_idle;
 
   Metric m;
-  m.name = "cpu_usage_total_percent";
+  m.type = MetricType::CpuUtilization;
+  m.devId = {};
   m.value = usage_percent;
   m.timestamp = std::chrono::duration_cast<std::chrono::milliseconds>(
                     std::chrono::system_clock::now().time_since_epoch())
                     .count();
 
   return {m};
+}
+
+std::vector<MetricType> ProcStatCollector::Satisfiable() {
+  return {MetricType::CpuUtilization};
 }
 
 void ProcStatCollector::ReadCpuStats(uint64_t& total, uint64_t& idle) {
