@@ -5,54 +5,10 @@
 #include <optional>
 #include <string>
 
+#include "volta.pb.h"
+
 namespace volta {
 namespace agent {
-
-enum class MetricType : uint16_t {
-  // CPU
-  CpuPowerPackage,
-  CpuPowerCores,
-  CpuClockSpeed,
-  CpuUtilization,
-  CpuTemperature,
-  CpuIowait,
-  CpuCacheHitRatio,
-  CpuActiveProcesses,
-
-  // GPU (vendor-agnostic — vendor goes in DeviceId)
-  GpuPower,
-  GpuClockSpeed,
-  GpuUtilization,
-  GpuTemperature,
-  GpuVramUsed,
-  GpuPcieBandwidth,
-  GpuComputeUnitUtilization,  // SM% on NVIDIA, CU% on AMD, EU% on Intel
-  GpuSharedMemoryUtilization,
-  GpuRegisterUtilization,
-
-  // RAM
-  RamPower,
-  RamTotal,
-  RamAvailable,
-  RamUsed,
-  RamCached,
-  SwapUsed,
-  SwapActivity,
-
-  // Disk
-  DiskReadThroughput,
-  DiskWriteThroughput,
-  DiskReadIops,
-  DiskWriteIops,
-  DiskBusyTime,
-  DiskCapacityUsed,
-
-  // Network
-  NetBytesReceived,
-  NetBytesSent,
-  NetPacketsReceived,
-  NetPacketsSent,
-};
 
 struct DeviceId {
   std::optional<std::string>
@@ -63,7 +19,7 @@ struct DeviceId {
 };
 
 struct Metric {
-  MetricType type;
+  v1::MetricType type;
   DeviceId devId;
   double value;
   int64_t timestamp;
