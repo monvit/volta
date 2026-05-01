@@ -34,7 +34,7 @@ std::vector<Metric> RaplCollector::Collect() {
   double value = energy_units_ * readout;
 
   Metric m;
-  m.type = MetricType::CpuPowerPackage;
+  m.type = v1::MetricType::METRIC_TYPE_CPU_POWER_PACKAGE;
   m.devId = {};
   m.value = value - last_value;
   m.timestamp = std::chrono::system_clock::now().time_since_epoch().count();
@@ -42,8 +42,8 @@ std::vector<Metric> RaplCollector::Collect() {
   return {m};
 }
 
-std::vector<MetricType> RaplCollector::Satisfiable() {
-  return {MetricType::CpuPowerPackage};
+std::vector<v1::MetricType> RaplCollector::Satisfiable() {
+  return {v1::MetricType::METRIC_TYPE_CPU_POWER_PACKAGE};
 };
 
 uint64_t RaplCollector::ReadMSR(uint8_t core, uint32_t offset) {

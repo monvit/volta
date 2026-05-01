@@ -15,7 +15,7 @@ class Collector {
 
   virtual std::vector<Metric> Collect() = 0;
 
-  virtual std::vector<MetricType> Satisfiable() = 0;
+  virtual std::vector<v1::MetricType> Satisfiable() = 0;
 
   virtual bool Init() { return true; }
 };

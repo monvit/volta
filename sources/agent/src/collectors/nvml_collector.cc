@@ -46,7 +46,7 @@ std::vector<Metric> NvmlCollector::Collect() {
   nvmlReturn_t result = nvmlDeviceGetPowerUsage(device_handle_, &power_mw);
 
   if (result == NVML_SUCCESS) {
-    metrics.push_back({MetricType::GpuPower,
+    metrics.push_back({v1::MetricType::METRIC_TYPE_GPU_POWER,
                        {.index = 0},
                        static_cast<double>(power_mw) / 1000.0,  // mW -> W
                        now});
@@ -56,7 +56,7 @@ std::vector<Metric> NvmlCollector::Collect() {
   result =
       nvmlDeviceGetTemperature(device_handle_, NVML_TEMPERATURE_GPU, &temp_c);
   if (result == NVML_SUCCESS) {
-    metrics.push_back({MetricType::GpuTemperature,
+    metrics.push_back({v1::MetricType::METRIC_TYPE_GPU_TEMPERATURE,
                        {.index = 0},
                        static_cast<double>(temp_c),
                        now});
@@ -66,22 +66,23 @@ std::vector<Metric> NvmlCollector::Collect() {
   result = nvmlDeviceGetUtilizationRates(device_handle_, &utilization);
 
   if (result == NVML_SUCCESS) {
-    metrics.push_back({MetricType::GpuUtilization,
+    metrics.push_back({v1::MetricType::METRIC_TYPE_GPU_UTILIZATION,
                        {.index = 0},
                        static_cast<double>(utilization.gpu),
                        now});
 
-    metrics.push_back({MetricType::GpuSharedMemoryUtilization,
-                       {.index = 0},
-                       static_cast<double>(utilization.memory),
-                       now});
+    metrics.push_back(
+        {v1::MetricType::METRIC_TYPE_GPU_SHARED_MEMORY_UTILIZATION,
+         {.index = 0},
+         static_cast<double>(utilization.memory),
+         now});
   }
 
   nvmlMemory_t memory;
   result = nvmlDeviceGetMemoryInfo(device_handle_, &memory);
 
   if (result == NVML_SUCCESS) {
-    metrics.push_back({MetricType::GpuVramUsed,
+    metrics.push_back({v1::MetricType::METRIC_TYPE_GPU_VRAM_USED,
                        {.index = 0},
                        static_cast<double>(memory.used),
                        now});
@@ -90,10 +91,12 @@ std::vector<Metric> NvmlCollector::Collect() {
   return metrics;
 }
 
-std::vector<MetricType> NvmlCollector::Satisfiable() {
-  return {MetricType::GpuVramUsed, MetricType::GpuUtilization,
-          MetricType::GpuSharedMemoryUtilization, MetricType::GpuTemperature,
-          MetricType::GpuPower};
+std::vector<v1::MetricType> NvmlCollector::Satisfiable() {
+  return {v1::MetricType::METRIC_TYPE_GPU_VRAM_USED,
+          v1::MetricType::METRIC_TYPE_GPU_UTILIZATION,
+          v1::MetricType::METRIC_TYPE_GPU_SHARED_MEMORY_UTILIZATION,
+          v1::MetricType::METRIC_TYPE_GPU_TEMPERATURE,
+          v1::MetricType::METRIC_TYPE_GPU_POWER};
 }
 
 }  // namespace collectors

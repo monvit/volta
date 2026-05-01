@@ -12,7 +12,7 @@ namespace collectors {
 class ProcStatCollector : public Collector {
  public:
   std::vector<Metric> Collect() override;
-  std::vector<MetricType> Satisfiable() override;
+  std::vector<v1::MetricType> Satisfiable() override;
 
  private:
   void ReadCpuStats(uint64_t& idle_time, uint64_t& total_time);

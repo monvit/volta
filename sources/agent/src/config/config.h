@@ -1,6 +1,7 @@
 #ifndef VOLTA_AGENT_CONFIG_CONFIG_H_
 #define VOLTA_AGENT_CONFIG_CONFIG_H_
 
+#include <metric.h>
 #include <sched.h>
 
 #include <chrono>
@@ -40,7 +41,7 @@ static constexpr char const* kNetDev = "net_dev";
 
 struct CollectorConfig {
   bool enabled = false;
-  std::map<std::string, bool> metrics;
+  std::map<v1::MetricType, bool> metrics;
 };
 
 struct Config {

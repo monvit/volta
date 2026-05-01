@@ -55,7 +55,7 @@ enum MetricType {
 
 service VoltaCollector {
   rpc CollectMetrics(stream MetricBatch) returns (CollectResponse);
-}
+
 
 message MetricBatch {
   google.protobuf.Timestamp timestamp = 1;
