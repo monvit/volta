@@ -18,41 +18,41 @@
 using namespace volta::agent;
 
 int main() {
-  auto channel = client::VoltaCollectorClient::CreateChannel("localhost:5000");
-  client::VoltaCollectorClient client(channel);
 
-     std::thread t([&client]() { client.Connect(); });
+  try {
+    auto channel = client::Client::CreateChannel("localhost:5000");
+    client::Client client(channel);
 
-  t.join();
+    std::thread t([&client]() { client.Connect(); });
 
-  // try {
-  //   auto config = config::ConfigLoader::LoadConfig();
+    t.join();
+    //   auto config = config::ConfigLoader::LoadConfig();
 
-  //   platform::PlatformDetector detector;
-  //   auto hw = detector.Detect();
-  //   detector.PrintDetectedInfo(hw);
+    //   platform::PlatformDetector detector;
+    //   auto hw = detector.Detect();
+    //   detector.PrintDetectedInfo(hw);
 
-  //   std::vector<std::unique_ptr<collectors::Collector>> active_collectors;
+    //   std::vector<std::unique_ptr<collectors::Collector>> active_collectors;
 
-  //   active_collectors.push_back(std::make_unique<collectors::ProcStatCollector>());
+    //   active_collectors.push_back(std::make_unique<collectors::ProcStatCollector>());
 
-  //   active_collectors.push_back(std::make_unique<collectors::RamCollector>());
+    //   active_collectors.push_back(std::make_unique<collectors::RamCollector>());
 
-  //   for (const auto& gpu : hw.gpus) {
-  //     if (gpu.vendor == platform::GpuVendor::NVIDIA) {
-  //       auto nvml = std::make_unique<collectors::NvmlCollector>();
-  //       if (nvml->Init()) {
-  //         active_collectors.push_back(std::move(nvml));
-  //       }
-  //     }
-  //   }
+    //   for (const auto& gpu : hw.gpus) {
+    //     if (gpu.vendor == platform::GpuVendor::NVIDIA) {
+    //       auto nvml = std::make_unique<collectors::NvmlCollector>();
+    //       if (nvml->Init()) {
+    //         active_collectors.push_back(std::move(nvml));
+    //       }
+    //     }
+    //   }
 
-  //   Scheduler scheduler(config, std::move(active_collectors));
-  //   scheduler.Run();
+    //   Scheduler scheduler(config, std::move(active_collectors));
+    //   scheduler.Run();
 
-  // } catch (const std::exception& e) {
-  //   std::cerr << "CRITICAL ERROR: " << e.what() << std::endl;
-  //   return 1;
-  // }
+  } catch (const std::exception& e) {
+    std::cerr << "CRITICAL ERROR: " << e.what() << std::endl;
+    return 1;
+  }
   return 0;
 }

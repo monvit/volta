@@ -49,21 +49,21 @@ func (s *VoltaCollectorServer) Connect(stream pb.VoltaCollector_ConnectServer) e
 	log.Info("new connection from %v.", p.Addr.String())
 
 	ch := make(chan *pb.ControlMessage, s.cfg.BufferSize)
-	// clientId := fmt.Sprintf("client%v", counter)
 	clientId := uuid.New().String()
 
-	// TODO: better key
 	s.mu.Lock()
 	// probably this check is not needed, but just in case
 	if _, exists := s.clients[clientId]; exists {
 		s.mu.Unlock()
 		return status.Errorf(codes.AlreadyExists, "uuid collision")
 	}
+
 	s.clients[clientId] = &Client{
 		stream: &stream,
 		ch:     ch,
 	}
 	counter++
+
 	s.mu.Unlock()
 
 	log.Info("client %v with id %v connected", clientId, p.Addr.String())

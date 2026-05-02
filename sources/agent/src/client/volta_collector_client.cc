@@ -2,28 +2,59 @@
 
 #include <grpcpp/create_channel.h>
 
-#include "readerwriter.h"
-
 namespace volta {
 namespace agent {
 namespace client {
-VoltaCollectorClient::VoltaCollectorClient(
-    std::shared_ptr<grpc::Channel> channel)
-    : stub_(::volta::VoltaCollector::NewStub(channel)) {}
 
-void VoltaCollectorClient::Connect() {
-  ReaderWriter rw(stub_.get());
-  grpc::Status status = rw.Await();
+Client::Client(std::shared_ptr<grpc::Channel> channel)
+  : stub_(::volta::VoltaCollector::NewStub(channel)) {}
 
-  if (!status.ok()) {
-    std::cout << "Stream closed with error: " << status.error_message()
-              << std::endl;
-  }
-}
-std::shared_ptr<grpc::Channel> VoltaCollectorClient::CreateChannel(
-    const std::string& address) {
+// TODO: consider making this more configurable, e.g. support TLS, custom options, etc.
+std::shared_ptr<grpc::Channel> Client::CreateChannel(const std::string& address) {
   return grpc::CreateChannel(address, grpc::InsecureChannelCredentials());
 }
-}  // namespace client
-}  // namespace agent
-}  // namespace volta
+
+void Client::Connect() {
+  rw_ = std::make_unique<ReaderWriter>(this, stub_.get());
+  grpc::Status status = rw_->Await();
+
+  if (!status.ok()) {
+    std::cout << "Stream closed with error: " << status.error_message() << std::endl;
+  }
+}
+
+void Client::OnMessage(const ::volta::ControlMessage& msg) {
+  switch (msg.type()) {
+    case ::volta::MessageType::PING: {
+      rw_->EnqueueWrite(::volta::MessageType::PONG);
+      break;
+    }
+
+    case ::volta::MessageType::PONG: {
+      break;
+    }
+
+    case ::volta::MessageType::SEND_DATA: {
+      rw_->EnqueueWrite(::volta::MessageType::OK);
+      break;
+    }
+
+    case ::volta::MessageType::ERROR: {
+      std::cerr << "Received error message from server" << std::endl;
+      break;
+    }
+
+    case ::volta::MessageType::OK: {
+      break;
+    }
+
+    default: {
+      std::cerr << "Received unknown message type from server" << std::endl;
+      break;
+    }
+  }
+}
+
+} // namespace client
+} // namespace agent
+} // namespace volta
