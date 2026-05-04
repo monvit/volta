@@ -9,14 +9,15 @@ namespace client {
 Client::Client(std::shared_ptr<grpc::Channel> channel)
   : stub_(::volta::VoltaCollector::NewStub(channel)) {}
 
-// TODO: consider making this more configurable, e.g. support TLS, custom options, etc.
+// TODO: consider making this more configurable, e.g. support TLS, custom
+// options, etc.
 std::shared_ptr<grpc::Channel> Client::CreateChannel(const std::string& address) {
   return grpc::CreateChannel(address, grpc::InsecureChannelCredentials());
 }
 
 void Client::Connect() {
-  rw_ = std::make_unique<ReaderWriter>(this, stub_.get());
-  grpc::Status status = rw_->Await();
+  connect_reactor_ = std::make_unique<ConnectReactor>(this, stub_.get());
+  grpc::Status status = connect_reactor_->Await();
 
   if (!status.ok()) {
     std::cout << "Stream closed with error: " << status.error_message() << std::endl;
@@ -26,7 +27,7 @@ void Client::Connect() {
 void Client::OnMessage(const ::volta::ControlMessage& msg) {
   switch (msg.type()) {
     case ::volta::MessageType::PING: {
-      rw_->EnqueueWrite(::volta::MessageType::PONG);
+      connect_reactor_->EnqueueWrite(connect_reactor_->CreateMessage(::volta::MessageType::PONG));
       break;
     }
 
@@ -35,7 +36,12 @@ void Client::OnMessage(const ::volta::ControlMessage& msg) {
     }
 
     case ::volta::MessageType::SEND_DATA: {
-      rw_->EnqueueWrite(::volta::MessageType::OK);
+      SendData();
+      break;
+    }
+
+    case ::volta::MessageType::STREAM_DATA: {
+      StreamData();
       break;
     }
 
@@ -53,6 +59,22 @@ void Client::OnMessage(const ::volta::ControlMessage& msg) {
       break;
     }
   }
+}
+
+void Client::SendData() {
+  connect_reactor_->EnqueueWrite(connect_reactor_->CreateMessage(::volta::MessageType::OK));
+}
+
+void Client::StreamData() {
+  stream_data_reactor_ = std::make_unique<StreamDataReactor>(stub_.get(), [this](const grpc::Status& status) {
+    if (!status.ok()) {
+      std::cerr << "StreamData RPC failed: " << status.error_message() << std::endl;
+    } else {
+      std::cout << "StreamData RPC completed successfully" << std::endl;
+    }
+  });
+
+  connect_reactor_->EnqueueWrite(connect_reactor_->CreateMessage(::volta::MessageType::OK));
 }
 
 } // namespace client

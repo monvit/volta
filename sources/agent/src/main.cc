@@ -18,7 +18,6 @@
 using namespace volta::agent;
 
 int main() {
-
   try {
     auto channel = client::Client::CreateChannel("localhost:5000");
     client::Client client(channel);

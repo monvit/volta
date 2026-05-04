@@ -75,6 +75,8 @@ func (s *VoltaCollectorServer) Connect(stream pb.VoltaCollector_ConnectServer) e
 		log.Info("client %v disconnected", clientId)
 	}()
 
+	ch <- CreateControlMessage(pb.MessageType_STREAM_DATA)
+
 	g, ctx := errgroup.WithContext(stream.Context())
 
 	g.Go(func() error {
@@ -93,6 +95,32 @@ func (s *VoltaCollectorServer) Connect(stream pb.VoltaCollector_ConnectServer) e
 	}
 
 	return nil
+}
+
+var (
+	count = 0
+)
+
+func (s *VoltaCollectorServer) StreamData(stream pb.VoltaCollector_StreamDataServer) error {
+	ctx := stream.Context()
+	count++
+	id := count
+	for {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		default:
+			msg, err := stream.Recv()
+			if err == io.EOF {
+				return nil
+			}
+			if err != nil {
+				return fmt.Errorf("recv: %w", err)
+			}
+
+			log.Debug("received metric from client%v: %v", id, msg)
+		}
+	}
 }
 
 func (s *VoltaCollectorServer) Clients() []string {
@@ -167,7 +195,6 @@ func (s *VoltaCollectorServer) ping(ch chan<- *pb.ControlMessage, ctx context.Co
 }
 
 func (s *VoltaCollectorServer) handleMessage(msg *pb.ControlMessage, clientId string) {
-	log.Debug("received message from client with id %v: %v", clientId, msg.Type.String())
 	switch msg.Type {
 	case pb.MessageType_PING:
 		s.clients[clientId].ch <- CreateControlMessage(pb.MessageType_PONG)

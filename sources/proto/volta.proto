@@ -2,6 +2,7 @@ syntax = "proto3";
 
 import "google/protobuf/timestamp.proto";
 import "google/protobuf/duration.proto";
+import "google/protobuf/empty.proto";
 
 package volta;
 
@@ -10,35 +11,39 @@ option go_package = "server/pb;pb";
 service VoltaCollector {
   // Bidirectional streaming RPC that remains open for the lifetime of the connection.
   // Exchanges control messages between the server and the agent.
-  // Primarily used for server requests that instruct the agent to send data.
+  // Primarily used for pings and server requests that instruct the agent to send data.
   rpc Connect(stream ControlMessage) returns (stream ControlMessage);
+
+  // Client streaming RPC that allows the agent to send a stream of metrics to the server.
+  rpc StreamData(stream Metric) returns (google.protobuf.Empty);
 }
 
 message ControlMessage {
-  MessageType type    = 1;
+  MessageType               type      = 1;
   google.protobuf.Timestamp timestamp = 2;
   oneof request {
     // TODO: error levels
-    string error = 3;
+    string          error             = 3;
     SendDataRequest send_data_request = 4;
   };
 }
 
 enum MessageType {
-  UNKNOWN   = 0;
-  SEND_DATA = 1;
-  OK        = 2;
-  ERROR     = 3;
-  PING      = 4;
-  PONG      = 5;
+  UNKNOWN     = 0;
+  SEND_DATA   = 1;
+  STREAM_DATA = 2;
+  OK          = 3;
+  ERROR       = 4;
+  PING        = 5;
+  PONG        = 6;
 }
 
 message SendDataRequest {
   oneof payload {
-    RangeDuration range_duration = 1;
-    RangeTime range_time = 2;
+    RangeDuration  range_duration   = 1;
+    RangeTime      range_time       = 2;
     RangeCountFrom range_count_from = 3;
-    uint32 count = 4;
+    uint32         count            = 4;
   }
 }
 
@@ -55,4 +60,10 @@ message RangeTime {
 message RangeCountFrom {
   uint64                    count = 1;
   google.protobuf.Timestamp from  = 2;
+}
+
+message Metric {
+  string                    name      = 1;
+  double                    value     = 2;
+  google.protobuf.Timestamp timestamp = 3;
 }
