@@ -1,6 +1,7 @@
 # --- Shared ---
 .vscode/
 *.code-workspace
+sources/**/logs
 
 # --- Agent ---
 build/
@@ -8,8 +9,8 @@ build/
 compile_commands.json
 sources/agent/agent.conf
 .clang-format
+*.uuid
 
 # --- Server ---
 sources/server/pb/
 sources/server/server
-sources/**/logs

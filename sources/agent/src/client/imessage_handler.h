@@ -8,13 +8,13 @@ namespace agent {
 namespace client {
 
 class IMessageHandler {
-public:
+ public:
   virtual ~IMessageHandler() = default;
   virtual void OnMessage(const ::volta::ControlMessage& msg) = 0;
 };
 
-} // namespace client
-} // namespace agent
-} // namespace volta
+}  // namespace client
+}  // namespace agent
+}  // namespace volta
 
-#endif // VOLTA_AGENT_CLIENT_IMESSAGE_HANDLER_H_
+#endif  // VOLTA_AGENT_CLIENT_IMESSAGE_HANDLER_H_

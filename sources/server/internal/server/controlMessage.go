@@ -18,10 +18,10 @@ func CreateControlMessage(msgType pb.MessageType, opts ...Option) *pb.ControlMes
 	return msg
 }
 
-func WithError(err string) Option {
+func WithPayload(payload string) Option {
 	return func(msg *pb.ControlMessage) {
-		msg.Request = &pb.ControlMessage_Error{
-			Error: err,
+		msg.Request = &pb.ControlMessage_Payload{
+			Payload: payload,
 		}
 	}
 }

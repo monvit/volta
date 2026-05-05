@@ -23,7 +23,7 @@ message ControlMessage {
   google.protobuf.Timestamp timestamp = 2;
   oneof request {
     // TODO: error levels
-    string          error             = 3;
+    string          payload           = 3;
     SendDataRequest send_data_request = 4;
   };
 }
@@ -36,6 +36,7 @@ enum MessageType {
   ERROR       = 4;
   PING        = 5;
   PONG        = 6;
+  ID          = 7;
 }
 
 message SendDataRequest {

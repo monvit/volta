@@ -4,8 +4,11 @@ namespace volta {
 namespace agent {
 namespace client {
 
-StreamDataReactor::StreamDataReactor(::volta::VoltaCollector::Stub* stub, OnDoneCallback on_done)
-  : on_done_(std::move(on_done)) {
+StreamDataReactor::StreamDataReactor(::volta::VoltaCollector::Stub* stub,
+                                     const std::string& id,
+                                     OnDoneCallback on_done)
+    : on_done_(std::move(on_done)) {
+  context_.AddMetadata("id", id);
   stub->async()->StreamData(&context_, nullptr, this);
 
   EnqueueWrite(CreateMetric("example_metric", 42.0));
@@ -26,15 +29,14 @@ void StreamDataReactor::OnWriteDone(bool ok) {
   }
 
   std::cout << "[" << std::chrono::system_clock::now() << "]"
-            << " Finished writing metric to server, queue size: " << writerqu_.size() << std::endl;
+            << " Finished writing metric to server, queue size: "
+            << writerqu_.size() << std::endl;
 
-  EnqueueWrite(CreateRandomMetric()); // for testing
+  EnqueueWrite(CreateRandomMetric());  // for testing
   // Write();
 }
 
-void StreamDataReactor::OnDone(const grpc::Status& status) {
-  on_done_(status);
-}
+void StreamDataReactor::OnDone(const grpc::Status& status) { on_done_(status); }
 
 void StreamDataReactor::EnqueueWrite(::volta::Metric msg) {
   std::lock_guard<std::mutex> l(mu_);
@@ -43,7 +45,8 @@ void StreamDataReactor::EnqueueWrite(::volta::Metric msg) {
   Write();
 }
 
-::volta::Metric StreamDataReactor::CreateMetric(const std::string& name, double value) {
+::volta::Metric StreamDataReactor::CreateMetric(const std::string& name,
+                                                double value) {
   ::volta::Metric metric;
   metric.set_name(name);
   metric.set_value(value);
@@ -60,6 +63,6 @@ void StreamDataReactor::Write() {
   StartWrite(&msg);
 }
 
-} // namespace client
-} // namespace agent
-} // namespace volta
+}  // namespace client
+}  // namespace agent
+}  // namespace volta

@@ -19,13 +19,14 @@ using namespace volta::agent;
 
 int main() {
   try {
+    auto config = config::ConfigLoader::LoadConfig();
+
     auto channel = client::Client::CreateChannel("localhost:5000");
-    client::Client client(channel);
+    client::Client client(channel, config);
 
     std::thread t([&client]() { client.Connect(); });
 
     t.join();
-    //   auto config = config::ConfigLoader::LoadConfig();
 
     //   platform::PlatformDetector detector;
     //   auto hw = detector.Detect();

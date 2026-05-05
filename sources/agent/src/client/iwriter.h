@@ -8,21 +8,21 @@ namespace volta {
 namespace agent {
 namespace client {
 
-template<typename T>
+template <typename T>
 class IWriter {
-public:
+ public:
   virtual ~IWriter() = default;
   virtual void EnqueueWrite(T msg) = 0;
 
-protected:
+ protected:
   virtual void Write() = 0;
 
   std::queue<T> writerqu_;
   bool writing_ = false;
 };
 
-} // namespace client
-} // namespace agent
-} // namespace volta
+}  // namespace client
+}  // namespace agent
+}  // namespace volta
 
-#endif // VOLTA_AGENT_CLIENT_IWRITER_H
+#endif  // VOLTA_AGENT_CLIENT_IWRITER_H

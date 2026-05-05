@@ -7,6 +7,7 @@ namespace volta {
 namespace agent {
 namespace utils {
 
+void PrintCurrentAffinity();
 bool IsValidIP(const std::string& ip);
 bool IsResolvable(const std::string& host);
 std::string GenerateUUIDv4();

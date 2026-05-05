@@ -8,8 +8,10 @@ namespace volta {
 namespace agent {
 namespace client {
 
-ConnectReactor::ConnectReactor(IMessageHandler* handler, ::volta::VoltaCollector::Stub* stub)
-  : handler_(handler) {
+ConnectReactor::ConnectReactor(IMessageHandler* handler, const std::string& id,
+                               ::volta::VoltaCollector::Stub* stub)
+    : handler_(handler) {
+  context_.AddMetadata("id", id);
   stub->async()->Connect(&context_, this);
 
   EnqueueWrite(CreateMessage(::volta::MessageType::PING));
@@ -29,7 +31,8 @@ void ConnectReactor::OnWriteDone(bool ok) {
   writerqu_.pop();
   writing_ = false;
   std::cout << "[" << std::chrono::system_clock::now() << "]"
-            << " Finished writing message to server, queue size: " << writerqu_.size() << std::endl;
+            << " Finished writing message to server, queue size: "
+            << writerqu_.size() << std::endl;
 
   Write();
 }
@@ -41,7 +44,8 @@ void ConnectReactor::OnReadDone(bool ok) {
   }
 
   std::cout << "[" << std::chrono::system_clock::now() << "]"
-            << " Message from server: " << ::volta::MessageType_Name(res_.type()) << std::endl;
+            << " Message from server: "
+            << ::volta::MessageType_Name(res_.type()) << std::endl;
   handler_->OnMessage(res_);
   StartRead(&res_);
 }
@@ -62,7 +66,8 @@ grpc::Status ConnectReactor::Await() {
 
 void ConnectReactor::EnqueueWrite(::volta::ControlMessage msg) {
   std::cout << "[" << std::chrono::system_clock::now() << "]"
-            << " Enqueuing message to server: " << ::volta::MessageType_Name(msg.type()) << std::endl;
+            << " Enqueuing message to server: "
+            << ::volta::MessageType_Name(msg.type()) << std::endl;
 
   std::lock_guard l(mu_);
 
@@ -77,25 +82,26 @@ void ConnectReactor::Write() {
   }
 
   std::cout << "[" << std::chrono::system_clock::now() << "]"
-            << " Starting write of message to server: " << ::volta::MessageType_Name(writerqu_.front().type())
-            << std::endl;
+            << " Starting write of message to server: "
+            << ::volta::MessageType_Name(writerqu_.front().type()) << std::endl;
 
   writing_ = true;
   auto& msg = writerqu_.front();
   StartWrite(&msg);
 }
 
-::volta::ControlMessage ConnectReactor::CreateMessage(::volta::MessageType type, const std::string& error) {
+::volta::ControlMessage ConnectReactor::CreateMessage(
+    ::volta::MessageType type, const std::string& payload) {
   ::volta::ControlMessage msg;
   msg.set_type(type);
 
   if (type == ::volta::MessageType::ERROR) {
-    msg.set_error(error);
+    msg.set_payload(payload);
   }
 
   return msg;
 }
 
-} // namespace client
-} // namespace agent
-} // namespace volta
+}  // namespace client
+}  // namespace agent
+}  // namespace volta

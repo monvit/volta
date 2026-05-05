@@ -87,26 +87,50 @@ func log(color, label, format string, args ...any) {
 	}
 }
 
-func Debug(format string, args ...any) {
+func Debugf(format string, args ...any) {
 	if level <= DEBUG {
-		log(gray, "DBG", format, args...)
+		log(gray, "[DBG]", format, args...)
 	}
 }
 
-func Info(format string, args ...any) {
+func Infof(format string, args ...any) {
 	if level <= INFO {
-		log(blue, "INF", format, args...)
+		log(blue, "[INF]", format, args...)
 	}
 }
 
-func Warn(format string, args ...any) {
+func Warnf(format string, args ...any) {
 	if level <= WARN {
-		log(yellow, "WRN", format, args...)
+		log(yellow, "[WRN]", format, args...)
 	}
 }
 
-func Error(format string, args ...any) {
+func Errorf(format string, args ...any) {
 	if level <= ERROR {
-		log(red, "ERR", format, args...)
+		log(red, "[ERR]", format, args...)
+	}
+}
+
+func Debug(str string) {
+	if level <= DEBUG {
+		log(gray, "[DBG]", "%v", str)
+	}
+}
+
+func Info(str string) {
+	if level <= INFO {
+		log(blue, "[INF]", "%v", str)
+	}
+}
+
+func Warn(str string) {
+	if level <= WARN {
+		log(yellow, "[WRN]", "%v", str)
+	}
+}
+
+func Error(err error) {
+	if level <= ERROR {
+		log(red, "[ERR]", "%v", err)
 	}
 }

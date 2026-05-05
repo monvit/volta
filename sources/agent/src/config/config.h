@@ -44,25 +44,6 @@ struct CollectorConfig {
 };
 
 struct Config {
-  void PrintCurrentAffinity() {
-    cpu_set_t set;
-    CPU_ZERO(&set);
-
-    if (sched_getaffinity(0, sizeof(set), &set) != 0) {
-      // TODO: Log
-      perror("sched_getaffinity");
-      return;
-    }
-
-    long max_cpus = sysconf(_SC_NPROCESSORS_CONF);
-    std::cout << "Current CPU affinity: ";
-
-    for (int i = 0; i < max_cpus; ++i) {
-      if (CPU_ISSET(i, &set)) std::cout << i << " ";
-    }
-    std::cout << "\n";
-  }
-
   static constexpr int32_t kDefaultIntervalMs = 500;
   static constexpr char const* kDefaultServerAddress = "localhost";
   static constexpr uint16_t kDefaultServerPort = 50051;
@@ -77,8 +58,6 @@ struct Config {
     }
     return mask;
   }();
-
-  std::string uuid = "";
 
   std::chrono::milliseconds collection_interval =
       std::chrono::milliseconds(kDefaultIntervalMs);

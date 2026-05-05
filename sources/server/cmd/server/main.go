@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 	"os"
-	"sync"
 
 	config "github.com/monvit/volta/sources/server/internal/config"
 	log "github.com/monvit/volta/sources/server/internal/logger"
@@ -20,28 +19,24 @@ func main() {
 	// config
 	result, err := config.Load()
 	if err != nil {
-		log.Error("config: %v", err)
+		log.Errorf("config: %v", err)
 		os.Exit(1)
 	}
+
 	for _, w := range result.Warnings {
-		log.Warn("config: %v", w)
+		log.Warnf("config: %v", w)
 	}
 
 	cfg := result.Config
 
-	was_err := false
-	var wg sync.WaitGroup
+	errCh := make(chan error, 2)
 
-	wg.Go(func() {
-		if err := server.Run(cfg); err != nil {
-			log.Error("server error: %v\n", err)
-			was_err = true
-		}
-	})
+	go func() { errCh <- server.Run(cfg) }()
+	// WS server (not implemented yet)
+	// go func() { errCh <- httpServer.Run(cfg) }()
 
-	wg.Wait()
-
-	if was_err {
+	if err := <-errCh; err != nil {
+		log.Errorf("fatal: %v", err)
 		os.Exit(1)
 	}
 }

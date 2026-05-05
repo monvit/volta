@@ -14,11 +14,12 @@ namespace client {
 
 class IMessageHandler;
 
-class ConnectReactor
-  : public grpc::ClientBidiReactor<::volta::ControlMessage, ::volta::ControlMessage>
-  , public IWriter<::volta::ControlMessage> {
-public:
-  explicit ConnectReactor(IMessageHandler* handler, ::volta::VoltaCollector::Stub* stub);
+class ConnectReactor : public grpc::ClientBidiReactor<::volta::ControlMessage,
+                                                      ::volta::ControlMessage>,
+                       public IWriter<::volta::ControlMessage> {
+ public:
+  explicit ConnectReactor(IMessageHandler* handler, const std::string& id,
+                          ::volta::VoltaCollector::Stub* stub);
   ~ConnectReactor() = default;
 
   // ClientBidiReactor
@@ -29,11 +30,12 @@ public:
   // IWriter
   void EnqueueWrite(::volta::ControlMessage msg) override;
 
-  ::volta::ControlMessage CreateMessage(::volta::MessageType type, const std::string& error = "");
+  ::volta::ControlMessage CreateMessage(::volta::MessageType type,
+                                        const std::string& payload = "");
   grpc::Status Await();
 
-private:
-  void Write() override; // IWriter
+ private:
+  void Write() override;  // IWriter
 
   IMessageHandler* handler_;
   ::volta::VoltaCollector::Stub* stub_;
@@ -47,8 +49,8 @@ private:
   bool done_ = false;
 };
 
-} // namespace client
-} // namespace agent
-} // namespace volta
+}  // namespace client
+}  // namespace agent
+}  // namespace volta
 
-#endif // VOLTA_AGENT_CLIENT_CONNECT_REACTOR_H_
+#endif  // VOLTA_AGENT_CLIENT_CONNECT_REACTOR_H_

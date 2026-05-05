@@ -9,6 +9,7 @@
 #include <iostream>
 #include <string>
 
+#include "config_loader.h"
 #include "utils/utils.h"
 
 namespace utils = volta::agent::utils;
@@ -19,7 +20,6 @@ namespace config {
 
 // TODO: different path for prod build
 std::filesystem::path ConfigLoader::kConfigFile = "agent.conf";
-std::filesystem::path ConfigLoader::kUUIDFile = "agent.uuid";
 
 std::set<std::string_view, std::less<>> ConfigLoader::kValidTopLevelKeys = {
     "core_affinity", "interval", "server_address", "server_port", "collectors"};
@@ -39,8 +39,6 @@ Config ConfigLoader::LoadConfig() {
 
 Config ConfigLoader::LoadDefaultConfig() {
   Config config;
-
-  if (!LoadUUID(config)) CreateUUID(config);
 
   CollectorConfig nvml_collector;
   nvml_collector.enabled = true;
@@ -98,34 +96,6 @@ void ConfigLoader::LoadConfigFile(Config& out_config) {
     std::cerr << "Parsing Agent config failed: " << err.description() << " at "
               << err.source().begin << std::endl;
   }
-}
-
-bool ConfigLoader::LoadUUID(Config& out_config) {
-  if (!std::filesystem::exists(kUUIDFile)) return false;
-
-  // TODO: Handle errors
-  std::fstream f(kUUIDFile);
-  std::string uuid;
-  std::getline(f, uuid);
-  out_config.uuid = uuid;
-  return true;
-}
-
-void ConfigLoader::CreateUUID(Config& out_config) {
-  // TODO: Handle errors
-  std::string uuid = utils::GenerateUUIDv4();
-
-  std::filesystem::path tmp = kUUIDFile;
-  tmp += ".tmp";
-
-  {
-    std::ofstream f(tmp, std::ios::trunc);
-    f << uuid;
-    f.flush();
-  }
-
-  std::filesystem::rename(tmp, kUUIDFile);
-  out_config.uuid = uuid;
 }
 
 void ConfigLoader::LoadCoreAffinity(toml::table& tbl, Config& out_config) {
