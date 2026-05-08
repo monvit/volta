@@ -1,0 +1,17 @@
+syntax = "proto3";
+
+package volta;
+
+import "google/protobuf/timestamp.proto";
+import "google/protobuf/empty.proto";
+import "google/api/annotations.proto";
+
+import "./types/api.proto";
+
+option go_package = "server/pb;pb";
+
+service VoltaDashboard {
+  rpc ListAgents(google.protobuf.Empty) returns (ListAgentsResponse) {
+    option (google.api.http) = { get: "/api/v1/agents" };
+  }
+}

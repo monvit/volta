@@ -1,10 +1,13 @@
 syntax = "proto3";
 
+package volta;
+
 import "google/protobuf/timestamp.proto";
 import "google/protobuf/duration.proto";
 import "google/protobuf/empty.proto";
 
-package volta;
+import "./types/transport.proto";
+import "./types/common.proto";
 
 option go_package = "server/pb;pb";
 
@@ -16,55 +19,4 @@ service VoltaCollector {
 
   // Client streaming RPC that allows the agent to send a stream of metrics to the server.
   rpc StreamData(stream Metric) returns (google.protobuf.Empty);
-}
-
-message ControlMessage {
-  MessageType               type      = 1;
-  google.protobuf.Timestamp timestamp = 2;
-  oneof request {
-    // TODO: error levels
-    string          payload           = 3;
-    SendDataRequest send_data_request = 4;
-  };
-}
-
-enum MessageType {
-  UNKNOWN     = 0;
-  SEND_DATA   = 1;
-  STREAM_DATA = 2;
-  OK          = 3;
-  ERROR       = 4;
-  PING        = 5;
-  PONG        = 6;
-  ID          = 7;
-}
-
-message SendDataRequest {
-  oneof payload {
-    RangeDuration  range_duration   = 1;
-    RangeTime      range_time       = 2;
-    RangeCountFrom range_count_from = 3;
-    uint32         count            = 4;
-  }
-}
-
-message RangeDuration {
-  google.protobuf.Duration  duration = 1;
-  google.protobuf.Timestamp from     = 2;
-}
-
-message RangeTime {
-  google.protobuf.Timestamp from = 1;
-  google.protobuf.Timestamp to   = 2;
-}
-
-message RangeCountFrom {
-  uint64                    count = 1;
-  google.protobuf.Timestamp from  = 2;
-}
-
-message Metric {
-  string                    name      = 1;
-  double                    value     = 2;
-  google.protobuf.Timestamp timestamp = 3;
 }

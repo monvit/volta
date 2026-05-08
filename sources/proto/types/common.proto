@@ -1,0 +1,12 @@
+syntax = "proto3";
+
+package volta;
+
+import "google/protobuf/timestamp.proto";
+
+message Metric {
+  string                    id        = 1;
+  string                    name      = 2;
+  double                    value     = 3;
+  google.protobuf.Timestamp timestamp = 4;
+}
