@@ -1,0 +1,13 @@
+syntax = "proto3";
+
+package volta;
+
+import "google/protobuf/timestamp.proto";
+
+option go_package = "github.com/monvit/volta/sources/server/pb/types;types";
+
+message Metric {
+  string                    name      = 1;
+  double                    value     = 2;
+  google.protobuf.Timestamp timestamp = 3;
+}

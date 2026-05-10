@@ -5,7 +5,7 @@ package volta;
 import "google/protobuf/duration.proto";
 import "google/protobuf/timestamp.proto";
 
-option go_package = "server/pb/types;types";
+option go_package = "github.com/monvit/volta/sources/server/pb/types;types";
 
 message ControlMessage {
   MessageType               type      = 1;
@@ -18,14 +18,14 @@ message ControlMessage {
 }
 
 enum MessageType {
-  UNKNOWN     = 0;
-  SEND_DATA   = 1;
-  STREAM_DATA = 2;
-  OK          = 3;
-  ERROR       = 4;
-  PING        = 5;
-  PONG        = 6;
-  ID          = 7;
+  MESSAGE_UNKNOWN     = 0;
+  MESSAGE_SEND_DATA   = 1;
+  MESSAGE_STREAM_DATA = 2;
+  MESSAGE_OK          = 3;
+  MESSAGE_ERROR       = 4;
+  MESSAGE_PING        = 5;
+  MESSAGE_PONG        = 6;
+  MESSAGE_ID          = 7;
 }
 
 message SendDataRequest {

@@ -1,0 +1,23 @@
+syntax = "proto3";
+
+package volta;
+
+import "google/protobuf/timestamp.proto";
+
+option go_package = "github.com/monvit/volta/sources/server/pb/types;types";
+
+message ListAgentsResponse {
+  repeated Agent agents = 1;
+}
+
+message Agent {
+  string                    id           = 1;
+  AgentStatus               status       = 2;
+}
+
+enum AgentStatus {
+  AGENT_STATUS_UNKNOWN      = 0;
+  AGENT_STATUS_CONNECTED    = 1;
+  AGENT_STATUS_DISCONNECTED = 2;
+  AGENT_STATUS_STREAMING    = 3;
+}

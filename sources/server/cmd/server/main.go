@@ -4,20 +4,20 @@ import (
 	"fmt"
 	"os"
 
-	config "github.com/monvit/volta/sources/server/internal/config"
+	b "github.com/monvit/volta/sources/server/internal/broker"
+	cfg "github.com/monvit/volta/sources/server/internal/config"
+	g "github.com/monvit/volta/sources/server/internal/gateway"
 	log "github.com/monvit/volta/sources/server/internal/logger"
-	server "github.com/monvit/volta/sources/server/internal/server"
+	s "github.com/monvit/volta/sources/server/internal/server"
 )
 
 func main() {
-	// logger
 	if err := log.Init(); err != nil {
 		fmt.Print(err)
 		os.Exit(1)
 	}
 
-	// config
-	result, err := config.Load()
+	result, err := cfg.Load()
 	if err != nil {
 		log.Errorf("config: %v", err)
 		os.Exit(1)
@@ -27,16 +27,23 @@ func main() {
 		log.Warnf("config: %v", w)
 	}
 
-	cfg := result.Config
+	config := result.Config
+	broker := b.New()
+	server := s.New(config, broker)
+	gateway := g.New(broker, server, server)
 
-	errCh := make(chan error, 2)
-
-	go func() { errCh <- server.Run(cfg) }()
-	// WS server (not implemented yet)
-	// go func() { errCh <- httpServer.Run(cfg) }()
-
-	if err := <-errCh; err != nil {
-		log.Errorf("fatal: %v", err)
-		os.Exit(1)
+	// TODO: handle errors and restarts
+	// temporary solution
+	run := func(name string, fn func() error) {
+		for {
+			if err := fn(); err != nil {
+				log.Errorf("%s error: %v, restarting...", name, err)
+			}
+		}
 	}
+
+	go run("gateway", func() error { return gateway.Run(config.RESTAddr, config.RESTPort) })
+	go run("grpc", func() error { return s.Run(config.GRPCAddr, config.GRPCPort, server) })
+
+	select {}
 }

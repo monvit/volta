@@ -14,7 +14,7 @@ ConnectReactor::ConnectReactor(IMessageHandler* handler, const std::string& id,
   context_.AddMetadata("id", id);
   stub->async()->Connect(&context_, this);
 
-  EnqueueWrite(CreateMessage(::volta::MessageType::PING));
+  EnqueueWrite(CreateMessage(::volta::MessageType::MESSAGE_PING));
 
   StartRead(&res_);
   StartCall();
@@ -95,7 +95,7 @@ void ConnectReactor::Write() {
   ::volta::ControlMessage msg;
   msg.set_type(type);
 
-  if (type == ::volta::MessageType::ERROR) {
+  if (type == ::volta::MessageType::MESSAGE_ERROR) {
     msg.set_payload(payload);
   }
 

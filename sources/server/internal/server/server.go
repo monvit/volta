@@ -6,23 +6,18 @@ import (
 
 	pb "github.com/monvit/volta/sources/server/pb"
 
-	config "github.com/monvit/volta/sources/server/internal/config"
-
 	"google.golang.org/grpc"
 )
 
-func Run(cfg *config.Config) error {
-	lis, err := net.Listen("tcp", fmt.Sprintf("localhost:%v", cfg.ServerPort))
+func Run(addr string, port uint, server *VoltaCollectorServer) error {
+	lis, err := net.Listen("tcp", fmt.Sprintf("%s:%v", addr, port))
 	if err != nil {
 		return err
 	}
 
 	var opts []grpc.ServerOption
 	grpcServer := grpc.NewServer(opts...)
-	server := &VoltaCollectorServer{
-		clients: make(map[string]*Client),
-		cfg:     cfg,
-	}
+	// server := New(cfg, broker)
 	pb.RegisterVoltaCollectorServer(grpcServer, server)
 
 	if err := grpcServer.Serve(lis); err != nil {

@@ -19,28 +19,51 @@ find_package(Threads REQUIRED)
 
 # --- Proto / gRPC code generation ---
 set(PROTO_DIR ${CMAKE_SOURCE_DIR}/../proto)
-set(PROTO_FILE ${PROTO_DIR}/volta.proto)
 
 get_target_property(GRPC_CPP_PLUGIN gRPC::grpc_cpp_plugin LOCATION)
 
-set(PROTO_SRC "${CMAKE_CURRENT_BINARY_DIR}/volta.pb.cc")
-set(PROTO_HDR "${CMAKE_CURRENT_BINARY_DIR}/volta.pb.h")
-set(GRPC_SRC  "${CMAKE_CURRENT_BINARY_DIR}/volta.grpc.pb.cc")
-set(GRPC_HDR  "${CMAKE_CURRENT_BINARY_DIR}/volta.grpc.pb.h")
+set(PROTO_FILES
+    ${PROTO_DIR}/volta.proto
+    ${PROTO_DIR}/types/metric.proto
+    ${PROTO_DIR}/types/transport.proto
+    ${PROTO_DIR}/types/agent.proto
+)
 
-add_custom_command(
-    OUTPUT  "${PROTO_SRC}" "${PROTO_HDR}" "${GRPC_SRC}" "${GRPC_HDR}"
-    COMMAND protobuf::protoc
-    ARGS    --cpp_out="${CMAKE_CURRENT_BINARY_DIR}"
+set(PROTO_SRCS "")
+set(PROTO_HDRS "")
+
+foreach(PROTO_FILE ${PROTO_FILES})
+    get_filename_component(PROTO_NAME ${PROTO_FILE} NAME_WE)
+    get_filename_component(PROTO_SUBDIR ${PROTO_FILE} DIRECTORY)
+    file(RELATIVE_PATH PROTO_REL ${PROTO_DIR} ${PROTO_SUBDIR})
+
+    set(OUT_DIR "${CMAKE_CURRENT_BINARY_DIR}/${PROTO_REL}")
+    file(MAKE_DIRECTORY ${OUT_DIR})
+
+    list(APPEND PROTO_SRCS "${OUT_DIR}/${PROTO_NAME}.pb.cc")
+    list(APPEND PROTO_SRCS "${OUT_DIR}/${PROTO_NAME}.grpc.pb.cc")
+    list(APPEND PROTO_HDRS "${OUT_DIR}/${PROTO_NAME}.pb.h")
+    list(APPEND PROTO_HDRS "${OUT_DIR}/${PROTO_NAME}.grpc.pb.h")
+
+    add_custom_command(
+        OUTPUT
+            "${OUT_DIR}/${PROTO_NAME}.pb.cc"
+            "${OUT_DIR}/${PROTO_NAME}.pb.h"
+            "${OUT_DIR}/${PROTO_NAME}.grpc.pb.cc"
+            "${OUT_DIR}/${PROTO_NAME}.grpc.pb.h"
+        COMMAND protobuf::protoc
+        ARGS
+            --cpp_out="${CMAKE_CURRENT_BINARY_DIR}"
             --grpc_out="${CMAKE_CURRENT_BINARY_DIR}"
             --plugin=protoc-gen-grpc="${GRPC_CPP_PLUGIN}"
             -I "${PROTO_DIR}"
             "${PROTO_FILE}"
-    DEPENDS "${PROTO_FILE}" gRPC::grpc_cpp_plugin
-    COMMENT "Generating C++ code from volta.proto..."
-)
+        DEPENDS "${PROTO_FILE}" gRPC::grpc_cpp_plugin
+        COMMENT "Generating C++ code from ${PROTO_FILE}..."
+    )
+endforeach()
 
-add_library(volta_proto STATIC ${PROTO_SRC} ${PROTO_HDR} ${GRPC_SRC} ${GRPC_HDR})
+add_library(volta_proto STATIC ${PROTO_SRCS} ${PROTO_HDRS})
 
 target_include_directories(volta_proto PUBLIC ${CMAKE_CURRENT_BINARY_DIR})
 

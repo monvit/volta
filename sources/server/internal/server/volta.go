@@ -5,14 +5,16 @@ import (
 	"fmt"
 	"io"
 	"maps"
-	"slices"
 	"sync"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/monvit/volta/sources/server/internal/broker"
 	config "github.com/monvit/volta/sources/server/internal/config"
 	log "github.com/monvit/volta/sources/server/internal/logger"
+	t "github.com/monvit/volta/sources/server/internal/types"
 	pb "github.com/monvit/volta/sources/server/pb"
+	pbt "github.com/monvit/volta/sources/server/pb/types"
 	"golang.org/x/sync/errgroup"
 
 	"google.golang.org/grpc/codes"
@@ -20,26 +22,50 @@ import (
 	"google.golang.org/grpc/status"
 )
 
+type rpcerror struct {
+	err  error
+	code codes.Code
+}
+
+func (e *rpcerror) Error() string {
+	return e.err.Error()
+}
+
+func rpcErrorf(code codes.Code, format string, a ...any) *rpcerror {
+	return &rpcerror{
+		err:  status.Errorf(code, format, a...),
+		code: code,
+	}
+}
+
 type Client struct {
+	t.Agent
 	stream   *pb.VoltaCollector_ConnectServer
-	ch       chan *pb.ControlMessage
+	ch       chan *pbt.ControlMessage
 	lastPong time.Time
-	// NOTE: don't know if needed
-	// mu       sync.RWMutex
 }
 
 type VoltaCollectorServer struct {
 	pb.UnimplementedVoltaCollectorServer
 
-	mu      sync.Mutex
+	mu      sync.RWMutex
 	clients map[string]*Client
 	cfg     *config.Config
+	broker  *broker.Broker
+}
+
+func New(cfg *config.Config, broker *broker.Broker) *VoltaCollectorServer {
+	return &VoltaCollectorServer{
+		clients: make(map[string]*Client),
+		cfg:     cfg,
+		broker:  broker,
+	}
 }
 
 func (s *VoltaCollectorServer) Connect(stream pb.VoltaCollector_ConnectServer) error {
 	md, ok := metadata.FromIncomingContext(stream.Context())
 	if !ok {
-		return status.Errorf(codes.Internal, "(Connect) metadata is not available")
+		return status.Errorf(codes.Internal, "metadata is not available")
 	}
 
 	ids := md.Get("id")
@@ -53,30 +79,16 @@ func (s *VoltaCollectorServer) Connect(stream pb.VoltaCollector_ConnectServer) e
 	} else {
 		// client with existing id
 		id = ids[0]
-		// NOTE: below check will be relevant when we implement the database
-		// if _, exists := s.clients[id]; !exists {
-		// 	return status.Errorf(codes.InvalidArgument, "client with id: %v doesn't exist", id)
-		// }
 
 		log.Infof("(Connect) connection from existing id %v.", id)
 	}
 
-	s.mu.Lock()
-	// probably this check is not needed, but just in case
-	if _, exists := s.clients[id]; exists {
-		s.mu.Unlock()
-		log.Errorf("(Connect) uuid collision when creating client id: %v", id)
-		return status.Errorf(codes.AlreadyExists, "(Connect) uuid collision when creating client id")
+	if err := s.addClient(id, &stream); err != nil {
+		return err
 	}
 
-	s.clients[id] = &Client{
-		stream: &stream,
-		ch:     make(chan *pb.ControlMessage, s.cfg.BufferSize),
-	}
-
-	s.clients[id].ch <- CreateControlMessage(pb.MessageType_ID, WithPayload(id))
-
-	s.mu.Unlock()
+	client := s.clients[id]
+	client.ch <- CreateControlMessage(pbt.MessageType_MESSAGE_ID, WithPayload(id))
 
 	defer func() {
 		s.mu.Lock()
@@ -85,44 +97,127 @@ func (s *VoltaCollectorServer) Connect(stream pb.VoltaCollector_ConnectServer) e
 		log.Infof("(Connect) client %v disconnected", id)
 	}()
 
-	s.clients[id].ch <- CreateControlMessage(pb.MessageType_STREAM_DATA)
+	// client.ch <- CreateControlMessage(pbt.MessageType_STREAM_DATA)
 
 	g, ctx := errgroup.WithContext(stream.Context())
 
 	g.Go(func() error {
-		return s.recv(stream, ctx, &id)
+		return s.recv(stream, ctx, client)
 	})
 	g.Go(func() error {
-		return s.send(stream, s.clients[id].ch, ctx, &id)
+		return s.send(stream, client.ch, ctx, &client.Id)
 	})
 	g.Go(func() error {
-		return s.ping(s.clients[id].ch, ctx)
+		return s.ping(client.ch, ctx)
 	})
 
 	if err := g.Wait(); err != nil {
 		log.Errorf("(Connect) stream error: %v", err)
-		return status.Errorf(codes.Internal, "(Connect) stream error: %v", err)
+		return status.Errorf(codes.Internal, "stream error: %v", err)
 	}
 
 	return nil
 }
 
+func (s *VoltaCollectorServer) addClient(id string, stream *pb.VoltaCollector_ConnectServer) *rpcerror {
+	if _, exists := s.clients[id]; exists {
+		return rpcErrorf(codes.AlreadyExists, "client with id %v already exists", id)
+	}
+
+	s.mu.Lock()
+
+	s.clients[id] = &Client{
+		Agent: t.Agent{
+			Id:     id,
+			Status: t.AGENT_STATUS_CONNECTED,
+		},
+		stream: stream,
+		ch:     make(chan *pbt.ControlMessage, s.cfg.BufferSize),
+	}
+
+	s.mu.Unlock()
+
+	return nil
+}
+
+func (s *VoltaCollectorServer) recv(stream pb.VoltaCollector_ConnectServer, ctx context.Context, client *Client) error {
+	for {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		default:
+			msg, err := stream.Recv()
+			if err == io.EOF {
+				return nil
+			}
+			if err != nil {
+				return fmt.Errorf("recv [%v]: %w", client.Id, err)
+			}
+
+			log.Debugf("(Connect) received message from client with id %v: %v", client.Id, msg)
+
+			client.lastPong = time.Now()
+			s.handleMessage(msg, client)
+		}
+	}
+}
+
+func (s *VoltaCollectorServer) send(stream pb.VoltaCollector_ConnectServer, ch <-chan *pbt.ControlMessage, ctx context.Context, clientId *string) error {
+	for {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case msg, ok := <-ch:
+			if !ok {
+				return nil
+			}
+			if err := stream.Send(msg); err != nil {
+				return fmt.Errorf("(Connect) [%v] send: %v", &clientId, err)
+			}
+		}
+	}
+}
+
+func (s *VoltaCollectorServer) ping(ch chan<- *pbt.ControlMessage, ctx context.Context) error {
+	// TODO: configure interval, maybe random
+	// send only if there are no recent messages from client, to avoid spamming?
+	// remove client if there is no response to ping for a long time
+	ticker := time.NewTicker(10 * time.Second)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-ticker.C:
+			ch <- CreateControlMessage(pbt.MessageType_MESSAGE_PING)
+		}
+	}
+}
+
+func (s *VoltaCollectorServer) handleMessage(msg *pbt.ControlMessage, client *Client) {
+	switch msg.Type {
+	case pbt.MessageType_MESSAGE_PING:
+		client.ch <- CreateControlMessage(pbt.MessageType_MESSAGE_PONG)
+	case pbt.MessageType_MESSAGE_PONG:
+		// TODO
+	case pbt.MessageType_MESSAGE_SEND_DATA:
+		client.ch <- CreateControlMessage(pbt.MessageType_MESSAGE_ERROR, WithPayload("SEND_DATA is only for clients"))
+	case pbt.MessageType_MESSAGE_STREAM_DATA:
+		client.ch <- CreateControlMessage(pbt.MessageType_MESSAGE_ERROR, WithPayload("STREAM_DATA is only for clients"))
+	case pbt.MessageType_MESSAGE_ERROR:
+		log.Infof("received error from id %v: %v", client.Id, msg.GetPayload())
+	case pbt.MessageType_MESSAGE_OK:
+	default:
+		log.Warnf("unknown message type from id %v: %v", client.Id, msg.Type)
+	}
+}
+
 func (s *VoltaCollectorServer) StreamData(stream pb.VoltaCollector_StreamDataServer) error {
-	// NOTE: maybe move id checking to separate function, since it will be needed in other RPCs
 	ctx := stream.Context()
-	md, ok := metadata.FromIncomingContext(ctx)
-	if !ok {
-		return status.Errorf(codes.Internal, "(StreamData) metadata is not available")
-	}
-
-	ids := md.Get("id")
-	if len(ids) == 0 || ids[0] == "" {
-		return status.Errorf(codes.InvalidArgument, "(StreamData) client id is required in metadata")
-	}
-
-	id := ids[0]
-	if _, exists := s.clients[id]; !exists {
-		return status.Errorf(codes.InvalidArgument, "(StreamData) client with id: %v, doesn't exist", id)
+	id, err := s.checkId(ctx)
+	if err != nil {
+		return err
 	}
 
 	log.Infof("(StreamData) client with id %v started streaming data", id)
@@ -137,98 +232,68 @@ func (s *VoltaCollectorServer) StreamData(stream pb.VoltaCollector_StreamDataSer
 				return nil
 			}
 			if err != nil {
-				return fmt.Errorf("(StreamData) recv: %w", err)
+				return status.Errorf(codes.Internal, "recv: %v", err)
 			}
+
+			s.broker.Publish(id, msg)
 
 			log.Debugf("(StreamData) received metric from id %v: %v", id, msg)
 		}
 	}
 }
 
-func (s *VoltaCollectorServer) Clients() []string {
-	return slices.Collect(maps.Keys(s.clients))
-}
-
-// TODO: check if client is connected, range should be passed as an argument
-func (s *VoltaCollectorServer) RequestDataFromClient(clientId string) error {
-	client, ok := s.clients[clientId]
+func (s *VoltaCollectorServer) checkId(ctx context.Context) (string, *rpcerror) {
+	md, ok := metadata.FromIncomingContext(ctx)
 	if !ok {
-		return fmt.Errorf("(RequestDataFromClient) client with given id %v, doesn't exist", clientId)
+		return "", rpcErrorf(codes.Internal, "metadata is not available")
 	}
 
-	// TODO: add options to control message, e.g. count, time range, etc.
-	client.ch <- CreateControlMessage(pb.MessageType_SEND_DATA, WithCount(10))
+	ids := md.Get("id")
+	if len(ids) == 0 || ids[0] == "" {
+		return "", rpcErrorf(codes.InvalidArgument, "client id is required in metadata")
+	}
 
-	return nil
+	id := ids[0]
+	if _, exists := s.clients[id]; !exists {
+		return "", rpcErrorf(codes.InvalidArgument, "client with id: %v, doesn't exist", id)
+	}
+
+	return id, nil
 }
 
-func (s *VoltaCollectorServer) recv(stream pb.VoltaCollector_ConnectServer, ctx context.Context, clientId *string) error {
-	for {
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		default:
-			msg, err := stream.Recv()
-			if err == io.EOF {
-				return nil
-			}
-			if err != nil {
-				return fmt.Errorf("(Connect) recv: %w", err)
-			}
+func (s *VoltaCollectorServer) ListAgents() []t.Agent {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
 
-			log.Debugf("(Connect) received message from client with id %v: %v", *clientId, msg)
+	agents := make([]t.Agent, len(s.clients))
 
-			s.clients[*clientId].lastPong = time.Now()
-			s.handleMessage(msg, *clientId)
-		}
+	for client := range maps.Values(s.clients) {
+		agents = append(agents, client.Agent)
 	}
+
+	return agents
 }
 
-func (s *VoltaCollectorServer) send(stream pb.VoltaCollector_ConnectServer, ch <-chan *pb.ControlMessage, ctx context.Context, clientId *string) error {
-	for {
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		case msg, ok := <-ch:
-			if !ok {
-				return nil
-			}
-			if err := stream.Send(msg); err != nil {
-				return fmt.Errorf("(Connect) send: %w", err)
-			}
-		}
+func (s *VoltaCollectorServer) RequestStreamMetrics(agentId string) error {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	if client, exists := s.clients[agentId]; exists {
+		client.ch <- CreateControlMessage(pbt.MessageType_MESSAGE_STREAM_DATA)
+		return nil
 	}
+
+	return fmt.Errorf("client with id: %v, doesn't exist", agentId)
 }
 
-func (s *VoltaCollectorServer) ping(ch chan<- *pb.ControlMessage, ctx context.Context) error {
-	// TODO: configure interval, maybe random
-	// send only if there are no recent messages from client, to avoid spamming?
-	// remove client if there is no response to ping for a long time
-	ticker := time.NewTicker(10 * time.Second)
-	defer ticker.Stop()
+func (s *VoltaCollectorServer) RequestSendMetrics(agentId string) error {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
 
-	for {
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		case <-ticker.C:
-			ch <- CreateControlMessage(pb.MessageType_PING)
-		}
+	if client, exists := s.clients[agentId]; exists {
+		client.ch <- CreateControlMessage(pbt.MessageType_MESSAGE_SEND_DATA)
+		return nil
 	}
-}
 
-func (s *VoltaCollectorServer) handleMessage(msg *pb.ControlMessage, clientId string) {
-	switch msg.Type {
-	case pb.MessageType_PING:
-		s.clients[clientId].ch <- CreateControlMessage(pb.MessageType_PONG)
-	case pb.MessageType_PONG:
-		// do nothing, just for testing connection
-	case pb.MessageType_SEND_DATA:
-		s.clients[clientId].ch <- CreateControlMessage(pb.MessageType_ERROR, WithPayload("SEND_DATA is only for clients"))
-	case pb.MessageType_ERROR:
-		log.Infof("received error from id %v: %v", clientId, msg.GetPayload())
-	case pb.MessageType_OK:
-	default:
-		log.Warnf("unknown message type from id %v: %v", clientId, msg.Type)
-	}
+	return fmt.Errorf("client with id: %v, doesn't exist", agentId)
 }

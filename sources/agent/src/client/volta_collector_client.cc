@@ -33,13 +33,15 @@ bool Client::LoadUUID(std::string& out_uuid) {
 void Client::SaveUUID(const std::string& uuid) {
   if (uuid.empty()) {
     std::cerr << "Cannot save empty UUID" << std::endl;
-    connect_reactor_->EnqueueWrite(connect_reactor_->CreateMessage(
-        ::volta::MessageType::ERROR, "Empty UUID received from server"));
+    connect_reactor_->EnqueueWrite(
+        connect_reactor_->CreateMessage(::volta::MessageType::MESSAGE_ERROR,
+                                        "Empty UUID received from server"));
     return;
   } else if (std::filesystem::exists(kUUIDFile)) {
     std::cerr << "UUID file already exists, refusing to overwrite" << std::endl;
-    connect_reactor_->EnqueueWrite(connect_reactor_->CreateMessage(
-        ::volta::MessageType::ERROR, "UUID file already exists on agent"));
+    connect_reactor_->EnqueueWrite(
+        connect_reactor_->CreateMessage(::volta::MessageType::MESSAGE_ERROR,
+                                        "UUID file already exists on agent"));
     return;
   }
 
@@ -71,38 +73,38 @@ void Client::Connect() {
 
 void Client::OnMessage(const ::volta::ControlMessage& msg) {
   switch (msg.type()) {
-    case ::volta::MessageType::PING: {
+    case ::volta::MessageType::MESSAGE_PING: {
       // TODO: timeout if pong not sent within certain time?
       connect_reactor_->EnqueueWrite(
-          connect_reactor_->CreateMessage(::volta::MessageType::PONG));
+          connect_reactor_->CreateMessage(::volta::MessageType::MESSAGE_PONG));
       break;
     }
 
-    case ::volta::MessageType::PONG: {
+    case ::volta::MessageType::MESSAGE_PONG: {
       // TODO: monitor latency?
       break;
     }
 
-    case ::volta::MessageType::SEND_DATA: {
+    case ::volta::MessageType::MESSAGE_SEND_DATA: {
       SendData();
       break;
     }
 
-    case ::volta::MessageType::STREAM_DATA: {
+    case ::volta::MessageType::MESSAGE_STREAM_DATA: {
       StreamData();
       break;
     }
 
-    case ::volta::MessageType::ERROR: {
+    case ::volta::MessageType::MESSAGE_ERROR: {
       std::cerr << "Received error message from server" << std::endl;
       break;
     }
 
-    case ::volta::MessageType::OK: {
+    case ::volta::MessageType::MESSAGE_OK: {
       break;
     }
 
-    case ::volta::MessageType::ID: {
+    case ::volta::MessageType::MESSAGE_ID: {
       std::cout << "Received ID from server: " << msg.payload() << std::endl;
       SaveUUID(msg.payload());
       break;
@@ -117,7 +119,7 @@ void Client::OnMessage(const ::volta::ControlMessage& msg) {
 
 void Client::SendData() {
   connect_reactor_->EnqueueWrite(
-      connect_reactor_->CreateMessage(::volta::MessageType::OK));
+      connect_reactor_->CreateMessage(::volta::MessageType::MESSAGE_OK));
 }
 
 void Client::StreamData() {
@@ -132,7 +134,7 @@ void Client::StreamData() {
       });
 
   connect_reactor_->EnqueueWrite(
-      connect_reactor_->CreateMessage(::volta::MessageType::OK));
+      connect_reactor_->CreateMessage(::volta::MessageType::MESSAGE_OK));
 }
 
 }  // namespace client

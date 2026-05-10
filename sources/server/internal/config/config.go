@@ -3,6 +3,7 @@ package config
 import (
 	"errors"
 	"fmt"
+	"net"
 	"os"
 	"strings"
 
@@ -17,19 +18,25 @@ import (
 )
 
 const (
-	PORT_DEFAULT = 5000
-	PORT_MIN     = 0
-	PORT_MAX     = 65535
+	GRPCPORT_DEFAULT = 5000
+	RESTPORT_DEFAULT = 8080
+	PORT_MIN         = 0
+	PORT_MAX         = 65535
 
 	BUFSIZE_DEFAULT = 16
 
 	SYS_CONF   = "/etc/volta/server.conf"
 	LOCAL_CONF = "server.conf"
 	ENV_FILE   = ".env"
+
+	ADDR_DEFAULT = "localhost"
 )
 
 type Config struct {
-	ServerPort uint   `koanf:"port"`
+	GRPCAddr   string `koanf:"grpc-addr"`
+	GRPCPort   uint   `koanf:"grpc-port"`
+	RESTAddr   string `koanf:"rest-addr"`
+	RESTPort   uint   `koanf:"rest-port"`
 	BufferSize uint   `koanf:"bufsize"`
 	LogLevel   string `koanf:"log-level"`
 }
@@ -72,7 +79,10 @@ func Load() (*LoadResult, error) {
 
 	// flags
 	f := flag.NewFlagSet("config", flag.ContinueOnError)
-	f.Uint("port", PORT_DEFAULT, "server port")
+	f.String("grpc-addr", ADDR_DEFAULT, "grpc server address")
+	f.String("rest-addr", ADDR_DEFAULT, "rest server address")
+	f.Uint("grpc-port", GRPCPORT_DEFAULT, "grpc server port")
+	f.Uint("rest-port", RESTPORT_DEFAULT, "rest server port")
 	f.Uint("bufsize", BUFSIZE_DEFAULT, "buffer size of each connection")
 	f.String("log-level", "info", "log level (debug, info, warn, error)")
 
@@ -95,8 +105,24 @@ func Load() (*LoadResult, error) {
 	}
 
 	// validation
-	if cfg.ServerPort > PORT_MAX || cfg.ServerPort < PORT_MIN {
-		errs = append(errs, fmt.Errorf("invalid port %d, must be between %d and %d", cfg.ServerPort, PORT_MIN, PORT_MAX))
+	if err := checkAddr(cfg.GRPCAddr); err != nil {
+		errs = append(errs, fmt.Errorf("invalid gRPC address: %w", err))
+	}
+
+	if err := checkAddr(cfg.RESTAddr); err != nil {
+		errs = append(errs, fmt.Errorf("invalid REST address: %w", err))
+	}
+
+	if cfg.GRPCPort == cfg.RESTPort {
+		errs = append(errs, fmt.Errorf("gRPC and REST ports cannot be the same"))
+	}
+
+	if cfg.GRPCPort > PORT_MAX || cfg.GRPCPort < PORT_MIN {
+		errs = append(errs, fmt.Errorf("invalid gRPC port %d, must be between %d and %d", cfg.GRPCPort, PORT_MIN, PORT_MAX))
+	}
+
+	if cfg.RESTPort > PORT_MAX || cfg.RESTPort < PORT_MIN {
+		errs = append(errs, fmt.Errorf("invalid REST port %d, must be between %d and %d", cfg.RESTPort, PORT_MIN, PORT_MAX))
 	}
 
 	lvl, err := log.ParseLevel(cfg.LogLevel)
@@ -115,4 +141,14 @@ func Load() (*LoadResult, error) {
 		Config:   &cfg,
 		Warnings: warnings,
 	}, nil
+}
+
+func checkAddr(addr string) error {
+	if net.ParseIP(addr) != nil {
+		return nil
+	}
+	if _, err := net.LookupHost(addr); err != nil {
+		return fmt.Errorf("invalid address: %s", addr)
+	}
+	return nil
 }

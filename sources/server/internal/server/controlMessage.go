@@ -1,14 +1,14 @@
 package server
 
 import (
-	pb "github.com/monvit/volta/sources/server/pb"
+	pbt "github.com/monvit/volta/sources/server/pb/types"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
-type Option func(*pb.ControlMessage)
+type Option func(*pbt.ControlMessage)
 
-func CreateControlMessage(msgType pb.MessageType, opts ...Option) *pb.ControlMessage {
-	msg := &pb.ControlMessage{
+func CreateControlMessage(msgType pbt.MessageType, opts ...Option) *pbt.ControlMessage {
+	msg := &pbt.ControlMessage{
 		Type:      msgType,
 		Timestamp: timestamppb.Now(),
 	}
@@ -19,16 +19,16 @@ func CreateControlMessage(msgType pb.MessageType, opts ...Option) *pb.ControlMes
 }
 
 func WithPayload(payload string) Option {
-	return func(msg *pb.ControlMessage) {
-		msg.Request = &pb.ControlMessage_Payload{
+	return func(msg *pbt.ControlMessage) {
+		msg.Request = &pbt.ControlMessage_Payload{
 			Payload: payload,
 		}
 	}
 }
 
-func WithSendDataRequest(req *pb.SendDataRequest) Option {
-	return func(msg *pb.ControlMessage) {
-		msg.Request = &pb.ControlMessage_SendDataRequest{
+func WithSendDataRequest(req *pbt.SendDataRequest) Option {
+	return func(msg *pbt.ControlMessage) {
+		msg.Request = &pbt.ControlMessage_SendDataRequest{
 			SendDataRequest: req,
 		}
 	}
@@ -36,10 +36,10 @@ func WithSendDataRequest(req *pb.SendDataRequest) Option {
 
 // TODO: ranges may have to be moved to separate messages
 func WithCount(count uint32) Option {
-	return func(msg *pb.ControlMessage) {
-		msg.Request = &pb.ControlMessage_SendDataRequest{
-			SendDataRequest: &pb.SendDataRequest{
-				Payload: &pb.SendDataRequest_Count{
+	return func(msg *pbt.ControlMessage) {
+		msg.Request = &pbt.ControlMessage_SendDataRequest{
+			SendDataRequest: &pbt.SendDataRequest{
+				Payload: &pbt.SendDataRequest_Count{
 					Count: count,
 				},
 			},
@@ -47,11 +47,11 @@ func WithCount(count uint32) Option {
 	}
 }
 
-func WithRangeDuration(duration *pb.RangeDuration) Option {
-	return func(msg *pb.ControlMessage) {
-		msg.Request = &pb.ControlMessage_SendDataRequest{
-			SendDataRequest: &pb.SendDataRequest{
-				Payload: &pb.SendDataRequest_RangeDuration{
+func WithRangeDuration(duration *pbt.RangeDuration) Option {
+	return func(msg *pbt.ControlMessage) {
+		msg.Request = &pbt.ControlMessage_SendDataRequest{
+			SendDataRequest: &pbt.SendDataRequest{
+				Payload: &pbt.SendDataRequest_RangeDuration{
 					RangeDuration: duration,
 				},
 			},
@@ -59,11 +59,11 @@ func WithRangeDuration(duration *pb.RangeDuration) Option {
 	}
 }
 
-func WithRangeTime(rangeTime *pb.RangeTime) Option {
-	return func(msg *pb.ControlMessage) {
-		msg.Request = &pb.ControlMessage_SendDataRequest{
-			SendDataRequest: &pb.SendDataRequest{
-				Payload: &pb.SendDataRequest_RangeTime{
+func WithRangeTime(rangeTime *pbt.RangeTime) Option {
+	return func(msg *pbt.ControlMessage) {
+		msg.Request = &pbt.ControlMessage_SendDataRequest{
+			SendDataRequest: &pbt.SendDataRequest{
+				Payload: &pbt.SendDataRequest_RangeTime{
 					RangeTime: rangeTime,
 				},
 			},
@@ -71,11 +71,11 @@ func WithRangeTime(rangeTime *pb.RangeTime) Option {
 	}
 }
 
-func WithRangeCountFrom(rangeCountFrom *pb.RangeCountFrom) Option {
-	return func(msg *pb.ControlMessage) {
-		msg.Request = &pb.ControlMessage_SendDataRequest{
-			SendDataRequest: &pb.SendDataRequest{
-				Payload: &pb.SendDataRequest_RangeCountFrom{
+func WithRangeCountFrom(rangeCountFrom *pbt.RangeCountFrom) Option {
+	return func(msg *pbt.ControlMessage) {
+		msg.Request = &pbt.ControlMessage_SendDataRequest{
+			SendDataRequest: &pbt.SendDataRequest{
+				Payload: &pbt.SendDataRequest_RangeCountFrom{
 					RangeCountFrom: rangeCountFrom,
 				},
 			},
