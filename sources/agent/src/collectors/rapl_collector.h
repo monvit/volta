@@ -16,12 +16,14 @@ class RaplCollector : public RegisteredCollector<RaplCollector> {
   std::vector<Metric> Collect() override;
   bool IsSupported() override;
   std::vector<v1::MetricType> Satisfiable() override;
+  void SetRequestedMetrics(const std::vector<v1::MetricType>& metrics) override;
   ~RaplCollector();
 
  private:
   uint64_t ReadMSR(uint8_t core, uint32_t offset);
   void OpenMSR();
   void CloseMSR(int fd);
+  std::vector<v1::MetricType> requested_metrics_;
   bool initialized_ = false;
   double power_units_, energy_units_, time_units_;
   std::vector<int> MSR_files_;

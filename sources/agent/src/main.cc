@@ -21,29 +21,14 @@ int main() {
   try {
     auto config = config::ConfigLoader::LoadConfig();
 
-    platform::PlatformDetector detector;
-    auto hw = detector.Detect();
-    detector.PrintDetectedInfo(hw);
+    // platform::PlatformDetector detector;
+    // auto hw = detector.Detect();
+    // detector.PrintDetectedInfo(hw);
 
-    std::vector<std::unique_ptr<collectors::Collector>> active_collectors;
+    auto active_collectors = collectors::CollectorRegistry::Instance().Resolve(
+        config.requestedMetrics);
 
-    auto proc = std::make_unique<collectors::ProcStatCollector>();
-    if (proc->Init()) active_collectors.push_back(std::move(proc));
-
-    auto ram = std::make_unique<collectors::RamCollector>();
-    if (ram->Init()) active_collectors.push_back(std::move(ram));
-
-    auto rapl = std::make_unique<collectors::RaplCollector>();
-    if (rapl->Init()) active_collectors.push_back(std::move(rapl));
-
-    for (const auto &gpu : hw.gpus) {
-      if (gpu.vendor == platform::GpuVendor::NVIDIA) {
-        auto nvml = std::make_unique<collectors::NvmlCollector>();
-        if (nvml->Init()) {
-          active_collectors.push_back(std::move(nvml));
-        }
-      }
-    }
+    std::cin.get();
 
     Scheduler scheduler(config, std::move(active_collectors));
     scheduler.Run();

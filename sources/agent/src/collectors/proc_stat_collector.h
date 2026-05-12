@@ -15,10 +15,12 @@ class ProcStatCollector : public RegisteredCollector<ProcStatCollector> {
   std::vector<Metric> Collect() override;
   bool IsSupported() override;
   std::vector<v1::MetricType> Satisfiable() override;
+  void SetRequestedMetrics(const std::vector<v1::MetricType>& metrics) override;
 
  private:
   void ReadCpuStats(uint64_t& idle_time, uint64_t& total_time);
 
+  std::vector<v1::MetricType> requested_metrics_;
   uint64_t prev_total_ = 0;
   uint64_t prev_idle_ = 0;
 };

@@ -13,16 +13,15 @@ namespace agent {
 
 class Scheduler {
  public:
-  explicit Scheduler(
-      const config::Config& config,
-      std::vector<std::unique_ptr<collectors::Collector>>&& collectors);
+  explicit Scheduler(const config::Config& config,
+                     std::vector<collectors::Collector*>&& collectors);
 
   void Run();
 
  private:
   void PrintDashboard(const std::vector<Metric>& metrics);
 
-  std::vector<std::unique_ptr<collectors::Collector>> collectors_;
+  std::vector<collectors::Collector*> collectors_;
   const config::Config& config_;
 };
 

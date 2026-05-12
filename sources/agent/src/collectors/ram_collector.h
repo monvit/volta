@@ -13,10 +13,12 @@ class RamCollector : public RegisteredCollector<RamCollector> {
   std::vector<Metric> Collect() override;
   bool IsSupported() override;
   std::vector<v1::MetricType> Satisfiable() override;
+  void SetRequestedMetrics(const std::vector<v1::MetricType>& metrics) override;
 
  private:
   void ReadStats(uint64_t& used, uint64_t& total);
 
+  std::vector<v1::MetricType> requested_metrics_;
   bool initialized_ = false;
 };
 

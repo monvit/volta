@@ -27,15 +27,12 @@ class ConfigLoader {
   static void LoadInterval(toml::table& tbl, Config& out_config);
   static void LoadServerAddress(toml::table& tbl, Config& out_config);
   static void LoadServerPort(toml::table& tbl, Config& out_config);
-  static void LoadCollectors(toml::table& tbl, Config& out_config);
+  static void LoadMetrics(toml::table& tbl, Config& out_config);
   static void CheckKeys(toml::table& tbl);
 
   static std::filesystem::path kConfigFile;
   static std::filesystem::path kUUIDFile;
   static std::set<std::string_view, std::less<>> kValidTopLevelKeys;
-  static std::map<std::string_view, std::set<std::string_view, std::less<>>,
-                  std::less<>>
-      kValidCollectors;
 };
 
 }  // namespace config

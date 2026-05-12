@@ -2,6 +2,7 @@
 
 #include <sched.h>
 
+#include <algorithm>
 #include <chrono>
 #include <cstdint>
 #include <filesystem>
@@ -12,6 +13,7 @@
 #include "utils/utils.h"
 
 namespace utils = volta::agent::utils;
+namespace v1 = volta::v1;
 
 namespace volta {
 namespace agent {
@@ -22,14 +24,7 @@ std::filesystem::path ConfigLoader::kConfigFile = "agent.conf";
 std::filesystem::path ConfigLoader::kUUIDFile = "agent.uuid";
 
 std::set<std::string_view, std::less<>> ConfigLoader::kValidTopLevelKeys = {
-    "core_affinity", "interval", "server_address", "server_port", "collectors"};
-
-std::map<std::string_view, std::set<std::string_view, std::less<>>, std::less<>>
-    ConfigLoader::kValidCollectors = {
-        {"cpu", {"proc_stat", "cpu_freq", "rapl", "zenpower", "pmu"}},
-        {"gpu", {"nvml", "dcgm", "rocm", "level_zero"}},
-        {"ram", {"mem_info", "vm_stat"}},
-        {"io", {"disk_stats", "net_dev"}}};
+    "core_affinity", "interval", "server_address", "server_port", "metrics"};
 
 Config ConfigLoader::LoadConfig() {
   Config config = LoadDefaultConfig();
@@ -42,25 +37,44 @@ Config ConfigLoader::LoadDefaultConfig() {
 
   if (!LoadUUID(config)) CreateUUID(config);
 
-  CollectorConfig nvml_collector;
-  nvml_collector.enabled = true;
-  nvml_collector.metrics = {
-      {v1::MetricType::METRIC_TYPE_GPU_UTILIZATION, true},
-      {v1::MetricType::METRIC_TYPE_GPU_SHARED_MEMORY_UTILIZATION, true},
-      {v1::MetricType::METRIC_TYPE_GPU_TEMPERATURE, true},
+  // request all metrics by default for now
+  config.requestedMetrics = {
+      v1::MetricType::METRIC_TYPE_UNSPECIFIED,
+      v1::MetricType::METRIC_TYPE_CPU_POWER_PACKAGE,
+      v1::MetricType::METRIC_TYPE_CPU_POWER_CORES,
+      v1::MetricType::METRIC_TYPE_CPU_CLOCK_SPEED,
+      v1::MetricType::METRIC_TYPE_CPU_UTILIZATION,
+      v1::MetricType::METRIC_TYPE_CPU_TEMPERATURE,
+      v1::MetricType::METRIC_TYPE_CPU_IOWAIT,
+      v1::MetricType::METRIC_TYPE_CPU_CACHE_HIT_RATIO,
+      v1::MetricType::METRIC_TYPE_CPU_ACTIVE_PROCESSES,
+      v1::MetricType::METRIC_TYPE_GPU_POWER,
+      v1::MetricType::METRIC_TYPE_GPU_CLOCK_SPEED,
+      v1::MetricType::METRIC_TYPE_GPU_UTILIZATION,
+      v1::MetricType::METRIC_TYPE_GPU_TEMPERATURE,
+      v1::MetricType::METRIC_TYPE_GPU_VRAM_USED,
+      v1::MetricType::METRIC_TYPE_GPU_PCIE_BANDWIDTH,
+      v1::MetricType::METRIC_TYPE_GPU_COMPUTE_UNIT_UTILIZATION,
+      v1::MetricType::METRIC_TYPE_GPU_SHARED_MEMORY_UTILIZATION,
+      v1::MetricType::METRIC_TYPE_GPU_REGISTER_UTILIZATION,
+      v1::MetricType::METRIC_TYPE_RAM_POWER,
+      v1::MetricType::METRIC_TYPE_RAM_TOTAL,
+      v1::MetricType::METRIC_TYPE_RAM_AVAILABLE,
+      v1::MetricType::METRIC_TYPE_RAM_USED,
+      v1::MetricType::METRIC_TYPE_RAM_CACHED,
+      v1::MetricType::METRIC_TYPE_SWAP_USED,
+      v1::MetricType::METRIC_TYPE_SWAP_ACTIVITY,
+      v1::MetricType::METRIC_TYPE_DISK_READ_THROUGHPUT,
+      v1::MetricType::METRIC_TYPE_DISK_WRITE_THROUGHPUT,
+      v1::MetricType::METRIC_TYPE_DISK_READ_IOPS,
+      v1::MetricType::METRIC_TYPE_DISK_WRITE_IOPS,
+      v1::MetricType::METRIC_TYPE_DISK_BUSY_TIME,
+      v1::MetricType::METRIC_TYPE_DISK_CAPACITY_USED,
+      v1::MetricType::METRIC_TYPE_NET_BYTES_RECEIVED,
+      v1::MetricType::METRIC_TYPE_NET_BYTES_SENT,
+      v1::MetricType::METRIC_TYPE_NET_PACKETS_RECEIVED,
+      v1::MetricType::METRIC_TYPE_NET_PACKETS_SENT,
   };
-  config.collectors[CollectorNames::kNvml] = nvml_collector;
-
-  CollectorConfig proc_stat_config;
-  proc_stat_config.enabled = true;
-  proc_stat_config.metrics[v1::MetricType::METRIC_TYPE_CPU_UTILIZATION] = true;
-  config.collectors[CollectorNames::kProcStat] = proc_stat_config;
-
-  CollectorConfig rapl_collector;
-  rapl_collector.enabled = true;
-  rapl_collector.metrics = {
-      {v1::MetricType::METRIC_TYPE_CPU_POWER_PACKAGE, true}};
-  config.collectors[CollectorNames::kRapl] = rapl_collector;
 
   return config;
 }
@@ -98,7 +112,7 @@ void ConfigLoader::LoadConfigFile(Config& out_config) {
     LoadInterval(tbl, out_config);
     LoadServerAddress(tbl, out_config);
     LoadServerPort(tbl, out_config);
-    LoadCollectors(tbl, out_config);
+    LoadMetrics(tbl, out_config);
     CheckKeys(tbl);
   } catch (const toml::parse_error& err) {
     std::cerr << "Parsing Agent config failed: " << err.description() << " at "
@@ -233,43 +247,70 @@ void ConfigLoader::LoadServerPort(toml::table& tbl, Config& out_config) {
   }
 }
 
-void ConfigLoader::LoadCollectors(toml::table& tbl, Config& out_config) {
-  if (!tbl.contains("collectors")) return;
+void ConfigLoader::LoadMetrics(toml::table& tbl, Config& out_config) {
+  if (!tbl.contains("metrics")) return;
 
-  auto collectors_node = tbl["collectors"].as_table();
+  auto metrics_node = tbl["metrics"];
 
-  for (auto&& [hardware_type, hardware_node] : *collectors_node) {
-    if (!kValidCollectors.contains(hardware_type.str())) {
-      std::cerr << "Invalid hardware type: " << hardware_type << std::endl;
-      continue;
+  std::vector<v1::MetricType> metrics;
+
+  auto append_metric = [&](v1::MetricType metric) {
+    if (metric == v1::MetricType::METRIC_TYPE_UNSPECIFIED) {
+      return;
     }
-
-    auto collectors = hardware_node.as_array();
-    if (!collectors) {
-      std::cout << "Element " << hardware_type << " is not an array\n";
-      continue;
+    if (std::find(metrics.begin(), metrics.end(), metric) == metrics.end()) {
+      metrics.push_back(metric);
     }
+  };
 
-    CollectorConfig collector_config;
+  auto parse_metric_name = [&](const std::string& name,
+                               v1::MetricType& metric) -> bool {
+    if (v1::MetricType_Parse(name, &metric)) return true;
+    if (v1::MetricType_Parse(std::string("METRIC_TYPE_") + name, &metric))
+      return true;
+    return false;
+  };
 
-    std::cout << hardware_type << std::endl;
-    for (auto&& collector : *collectors) {
-      if (auto str = collector.value<std::string>()) {
-        const auto& collector_set = kValidCollectors[hardware_type.str()];
-        if (!collector_set.contains(*str)) {
-          std::cout << "Invalid collector: " << *str
-                    << ", for hardware: " << hardware_type << std::endl;
+  if (auto arr = metrics_node.as_array()) {
+    for (const auto& item : *arr) {
+      if (auto metric_num = item.value<int>()) {
+        if (!v1::MetricType_IsValid(*metric_num)) {
+          std::cerr << "Invalid metric value: " << *metric_num << std::endl;
           continue;
         }
-
-        std::cout << *str << std::endl;
-        // TODO: Add metrics
-
-        collector_config.enabled = !collector_config.metrics.empty();
-      } else {
-        std::cerr << "Invalid type in " << hardware_type << " array\n";
+        append_metric(static_cast<v1::MetricType>(*metric_num));
+        continue;
       }
+
+      if (auto metric_name = item.value<std::string>()) {
+        v1::MetricType metric;
+        if (!parse_metric_name(*metric_name, metric)) {
+          std::cerr << "Invalid metric name: " << *metric_name << std::endl;
+          continue;
+        }
+        append_metric(metric);
+        continue;
+      }
+
+      std::cerr << "Invalid metric entry type" << std::endl;
     }
+  } else if (auto val = metrics_node.value<std::string>()) {
+    v1::MetricType metric;
+    if (parse_metric_name(*val, metric)) {
+      append_metric(metric);
+    } else {
+      std::cerr << "Invalid metric name: " << *val << std::endl;
+    }
+  } else {
+    std::cerr << "Invalid metrics value, use array of strings or numbers"
+              << std::endl;
+    return;
+  }
+
+  if (!metrics.empty()) {
+    out_config.requestedMetrics = std::move(metrics);
+    std::cout << "Requested metrics updated to "
+              << out_config.requestedMetrics.size() << " entries" << std::endl;
   }
 }
 

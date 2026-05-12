@@ -7,16 +7,16 @@
 namespace volta {
 namespace agent {
 
-Scheduler::Scheduler(
-    const config::Config& config,
-    std::vector<std::unique_ptr<collectors::Collector>>&& collectors)
+Scheduler::Scheduler(const config::Config& config,
+                     std::vector<collectors::Collector*>&& collectors)
     : config_(config), collectors_(std::move(collectors)) {}
 
 void Scheduler::Run() {
+  for (auto collector : collectors_) {
+    collector->Init();
+  }
   std::cout << "[" << config_.uuid << "] Starting collection loop (Interval: "
             << config_.collection_interval.count() << "ms)..." << std::endl;
-
-  std::this_thread::sleep_for(config_.collection_interval);
 
   while (true) {
     std::vector<Metric> batch;

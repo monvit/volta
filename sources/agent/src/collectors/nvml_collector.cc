@@ -1,5 +1,6 @@
 #include "collectors/nvml_collector.h"
 
+#include <algorithm>
 #include <chrono>
 #include <iostream>
 
@@ -54,53 +55,77 @@ bool NvmlCollector::IsSupported() {
   return result == NVML_SUCCESS;
 }
 
+void NvmlCollector::SetRequestedMetrics(
+    const std::vector<v1::MetricType>& metrics) {
+  requested_metrics_ = metrics;
+}
+
 std::vector<Metric> NvmlCollector::Collect() {
-  if (!initialized_) return {};
+  if (!initialized_ || requested_metrics_.empty()) return {};
 
   std::vector<Metric> metrics;
   unsigned int power_mw = 0;
   auto now = std::chrono::system_clock::now().time_since_epoch().count();
 
-  nvmlReturn_t result = nvmlDeviceGetPowerUsage(device_handle_, &power_mw);
-  if (result == NVML_SUCCESS) {
-    metrics.push_back({v1::MetricType::METRIC_TYPE_GPU_POWER,
-                       {.index = 0},
-                       static_cast<double>(power_mw) / 1000.0,
-                       now});
+  auto needs = [&](v1::MetricType type) {
+    return std::find(requested_metrics_.begin(), requested_metrics_.end(),
+                     type) != requested_metrics_.end();
+  };
+
+  nvmlReturn_t result;
+  if (needs(v1::MetricType::METRIC_TYPE_GPU_POWER)) {
+    result = nvmlDeviceGetPowerUsage(device_handle_, &power_mw);
+    if (result == NVML_SUCCESS) {
+      metrics.push_back({v1::MetricType::METRIC_TYPE_GPU_POWER,
+                         {.index = 0},
+                         static_cast<double>(power_mw) / 1000.0,
+                         now});
+    }
   }
 
-  unsigned int temp_c = 0;
-  result =
-      nvmlDeviceGetTemperature(device_handle_, NVML_TEMPERATURE_GPU, &temp_c);
-  if (result == NVML_SUCCESS) {
-    metrics.push_back({v1::MetricType::METRIC_TYPE_GPU_TEMPERATURE,
-                       {.index = 0},
-                       static_cast<double>(temp_c),
-                       now});
+  if (needs(v1::MetricType::METRIC_TYPE_GPU_TEMPERATURE)) {
+    unsigned int temp_c = 0;
+    result =
+        nvmlDeviceGetTemperature(device_handle_, NVML_TEMPERATURE_GPU, &temp_c);
+    if (result == NVML_SUCCESS) {
+      metrics.push_back({v1::MetricType::METRIC_TYPE_GPU_TEMPERATURE,
+                         {.index = 0},
+                         static_cast<double>(temp_c),
+                         now});
+    }
   }
 
-  nvmlUtilization_t utilization;
-  result = nvmlDeviceGetUtilizationRates(device_handle_, &utilization);
-  if (result == NVML_SUCCESS) {
-    metrics.push_back({v1::MetricType::METRIC_TYPE_GPU_UTILIZATION,
-                       {.index = 0},
-                       static_cast<double>(utilization.gpu),
-                       now});
-    metrics.push_back(
-        {v1::MetricType::METRIC_TYPE_GPU_SHARED_MEMORY_UTILIZATION,
-         {.index = 0},
-         static_cast<double>(utilization.memory),
-         now});
+  if (needs(v1::MetricType::METRIC_TYPE_GPU_UTILIZATION) ||
+      needs(v1::MetricType::METRIC_TYPE_GPU_SHARED_MEMORY_UTILIZATION)) {
+    nvmlUtilization_t utilization;
+    result = nvmlDeviceGetUtilizationRates(device_handle_, &utilization);
+    if (result == NVML_SUCCESS) {
+      if (needs(v1::MetricType::METRIC_TYPE_GPU_UTILIZATION)) {
+        metrics.push_back({v1::MetricType::METRIC_TYPE_GPU_UTILIZATION,
+                           {.index = 0},
+                           static_cast<double>(utilization.gpu),
+                           now});
+      }
+      if (needs(v1::MetricType::METRIC_TYPE_GPU_SHARED_MEMORY_UTILIZATION)) {
+        metrics.push_back(
+            {v1::MetricType::METRIC_TYPE_GPU_SHARED_MEMORY_UTILIZATION,
+             {.index = 0},
+             static_cast<double>(utilization.memory),
+             now});
+      }
+    }
   }
 
-  nvmlMemory_t memory;
-  result = nvmlDeviceGetMemoryInfo(device_handle_, &memory);
-  if (result == NVML_SUCCESS) {
-    metrics.push_back(
-        {v1::MetricType::METRIC_TYPE_GPU_VRAM_USED,
-         {.index = 0},
-         static_cast<double>(memory.used) / static_cast<double>(memory.total),
-         now});
+  if (needs(v1::MetricType::METRIC_TYPE_GPU_VRAM_USED)) {
+    nvmlMemory_t memory;
+    result = nvmlDeviceGetMemoryInfo(device_handle_, &memory);
+    if (result == NVML_SUCCESS) {
+      metrics.push_back(
+          {v1::MetricType::METRIC_TYPE_GPU_VRAM_USED,
+           {.index = 0},
+           static_cast<double>(memory.used) / static_cast<double>(memory.total),
+           now});
+    }
   }
 
   return metrics;

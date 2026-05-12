@@ -1,5 +1,6 @@
 #include "collectors/proc_stat_collector.h"
 
+#include <algorithm>
 #include <chrono>
 #include <filesystem>
 #include <sstream>
@@ -10,7 +11,20 @@ namespace collectors {
 
 bool ProcStatCollector::Init() { return true; }
 
+void ProcStatCollector::SetRequestedMetrics(
+    const std::vector<v1::MetricType>& metrics) {
+  requested_metrics_ = metrics;
+}
+
 std::vector<Metric> ProcStatCollector::Collect() {
+  if (requested_metrics_.empty()) return {};
+
+  if (std::find(requested_metrics_.begin(), requested_metrics_.end(),
+                v1::MetricType::METRIC_TYPE_CPU_UTILIZATION) ==
+      requested_metrics_.end()) {
+    return {};
+  }
+
   uint64_t current_total = 0;
   uint64_t current_idle = 0;
 

@@ -14,35 +14,6 @@
 namespace volta {
 namespace agent {
 namespace config {
-// TODO: Metrics and Collector names into something that can be read with a
-// string
-namespace CollectorNames {
-// CPU
-static constexpr char const* kProcStat = "proc_stat";
-static constexpr char const* kCpuFreq = "cpu_freq";
-static constexpr char const* kRapl = "rapl";
-static constexpr char const* kZenPower = "zenpower";
-static constexpr char const* kPmu = "pmu";
-
-// GPU
-static constexpr char const* kNvml = "nvml";
-static constexpr char const* kDcgm = "dcgm";
-static constexpr char const* kRocm = "rocm";
-static constexpr char const* kLevelZero = "level_zero";
-
-// RAM
-static constexpr char const* kMemInfo = "mem_info";
-static constexpr char const* kVmStat = "vm_stat";
-
-// Disc and Network (I/O)
-static constexpr char const* kDiskStats = "disk_stats";
-static constexpr char const* kNetDev = "net_dev";
-}  // namespace CollectorNames
-
-struct CollectorConfig {
-  bool enabled = false;
-  std::map<v1::MetricType, bool> metrics;
-};
 
 struct Config {
   void PrintCurrentAffinity() {
@@ -63,7 +34,8 @@ struct Config {
     }
     std::cout << "\n";
   }
-
+  // TODO: move this initialization logic to the ConfigLoader's
+  // LoadDefaultConfig method
   static constexpr int32_t kDefaultIntervalMs = 500;
   static constexpr char const* kDefaultServerAddress = "localhost";
   static constexpr uint16_t kDefaultServerPort = 50051;
@@ -84,11 +56,9 @@ struct Config {
   std::chrono::milliseconds collection_interval =
       std::chrono::milliseconds(kDefaultIntervalMs);
   cpu_set_t core_affinity = kDefaultAffinity;
-
   std::string server_address = kDefaultServerAddress;
   uint16_t server_port = kDefaultServerPort;
-
-  std::map<std::string, CollectorConfig> collectors;
+  std::vector<v1::MetricType> requestedMetrics;
 };
 
 }  // namespace config

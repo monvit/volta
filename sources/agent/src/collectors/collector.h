@@ -20,6 +20,9 @@ class Collector {
 
   virtual std::vector<v1::MetricType> Satisfiable() = 0;
 
+  virtual void SetRequestedMetrics(
+      const std::vector<v1::MetricType>& metrics) = 0;
+
   virtual bool Init() { return true; }
 };
 
@@ -34,17 +37,21 @@ class CollectorRegistry {
     entries_.push_back(std::move(collector));
   }
 
-  std::vector<Collector*> Resolve(const std::vector<v1::MetricType>& desired,
-                                  platform::HardwareInfo hw) const {
+  std::vector<Collector*> Resolve(const std::vector<v1::MetricType>& desired) {
     std::vector<Collector*> result;
     for (auto& collector : entries_) {
       if (!collector->IsSupported()) continue;
 
+      std::vector<v1::MetricType> active;
       for (const auto& type : collector->Satisfiable()) {
         if (std::find(desired.begin(), desired.end(), type) != desired.end()) {
-          result.push_back(collector.get());
-          break;
+          active.push_back(type);
         }
+      }
+
+      if (!active.empty()) {
+        collector->SetRequestedMetrics(active);
+        result.push_back(collector.get());
       }
     }
     return result;

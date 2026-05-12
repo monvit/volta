@@ -53,8 +53,18 @@ bool RaplCollector::IsSupported() {
   return false;
 }
 
+void RaplCollector::SetRequestedMetrics(
+    const std::vector<v1::MetricType>& metrics) {
+  requested_metrics_ = metrics;
+}
+
 std::vector<Metric> RaplCollector::Collect() {
-  if (!initialized_) return {};
+  if (!initialized_ || requested_metrics_.empty()) return {};
+  if (std::find(requested_metrics_.begin(), requested_metrics_.end(),
+                v1::MetricType::METRIC_TYPE_CPU_POWER_PACKAGE) ==
+      requested_metrics_.end()) {
+    return {};
+  }
 
   uint64_t readout;
   try {

@@ -3,6 +3,8 @@
 
 #include <nvml.h>
 
+#include <vector>
+
 #include "collectors/collector.h"
 
 namespace volta {
@@ -21,8 +23,11 @@ class NvmlCollector : public RegisteredCollector<NvmlCollector> {
   std::vector<Metric> Collect() override;
   bool IsSupported() override;
   std::vector<v1::MetricType> Satisfiable() override;
+  void SetRequestedMetrics(const std::vector<v1::MetricType>& metrics) override;
 
  private:
+  std::vector<v1::MetricType> requested_metrics_;
+
   nvmlDevice_t device_handle_;
   bool initialized_ = false;
 };
