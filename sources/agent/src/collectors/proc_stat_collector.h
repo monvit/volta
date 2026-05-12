@@ -9,9 +9,11 @@ namespace volta {
 namespace agent {
 namespace collectors {
 
-class ProcStatCollector : public Collector {
+class ProcStatCollector : public RegisteredCollector<ProcStatCollector> {
  public:
+  bool Init() override;
   std::vector<Metric> Collect() override;
+  bool IsSupported() override;
   std::vector<v1::MetricType> Satisfiable() override;
 
  private:

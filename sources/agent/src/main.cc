@@ -27,10 +27,15 @@ int main() {
 
     std::vector<std::unique_ptr<collectors::Collector>> active_collectors;
 
-    active_collectors.push_back(
-        std::make_unique<collectors::ProcStatCollector>());
-    active_collectors.push_back(std::make_unique<collectors::RamCollector>());
-    active_collectors.push_back(std::make_unique<collectors::RaplCollector>());
+    auto proc = std::make_unique<collectors::ProcStatCollector>();
+    if (proc->Init()) active_collectors.push_back(std::move(proc));
+
+    auto ram = std::make_unique<collectors::RamCollector>();
+    if (ram->Init()) active_collectors.push_back(std::move(ram));
+
+    auto rapl = std::make_unique<collectors::RaplCollector>();
+    if (rapl->Init()) active_collectors.push_back(std::move(rapl));
+
     for (const auto &gpu : hw.gpus) {
       if (gpu.vendor == platform::GpuVendor::NVIDIA) {
         auto nvml = std::make_unique<collectors::NvmlCollector>();

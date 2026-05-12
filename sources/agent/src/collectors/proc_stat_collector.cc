@@ -1,11 +1,14 @@
 #include "collectors/proc_stat_collector.h"
 
 #include <chrono>
+#include <filesystem>
 #include <sstream>
 
 namespace volta {
 namespace agent {
 namespace collectors {
+
+bool ProcStatCollector::Init() { return true; }
 
 std::vector<Metric> ProcStatCollector::Collect() {
   uint64_t current_total = 0;
@@ -17,8 +20,9 @@ std::vector<Metric> ProcStatCollector::Collect() {
   uint64_t diff_idle = current_idle - prev_idle_;
 
   double usage_percent = 0.0;
-  if (diff_total > 0)
+  if (diff_total > 0) {
     usage_percent = (double)(diff_total - diff_idle) / diff_total * 100.0;
+  }
 
   prev_total_ = current_total;
   prev_idle_ = current_idle;
@@ -32,6 +36,10 @@ std::vector<Metric> ProcStatCollector::Collect() {
                     .count();
 
   return {m};
+}
+
+bool ProcStatCollector::IsSupported() {
+  return std::filesystem::exists("/proc/stat");
 }
 
 std::vector<v1::MetricType> ProcStatCollector::Satisfiable() {

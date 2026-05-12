@@ -7,9 +7,7 @@ namespace volta {
 namespace agent {
 namespace collectors {
 
-NvmlCollector::NvmlCollector() {
-  // Initialization moved to Init()
-}
+NvmlCollector::NvmlCollector() = default;
 
 NvmlCollector::~NvmlCollector() {
   if (initialized_) {
@@ -29,11 +27,31 @@ bool NvmlCollector::Init() {
   if (result != NVML_SUCCESS) {
     std::cerr << "Failed to get device handle: " << nvmlErrorString(result)
               << std::endl;
+    nvmlShutdown();
     return false;
   }
 
   initialized_ = true;
   return true;
+}
+
+bool NvmlCollector::IsSupported() {
+  nvmlReturn_t result = nvmlInit();
+  if (result != NVML_SUCCESS) {
+    return false;
+  }
+
+  unsigned int device_count = 0;
+  result = nvmlDeviceGetCount(&device_count);
+  if (result != NVML_SUCCESS || device_count == 0) {
+    nvmlShutdown();
+    return false;
+  }
+
+  nvmlDevice_t device;
+  result = nvmlDeviceGetHandleByIndex(0, &device);
+  nvmlShutdown();
+  return result == NVML_SUCCESS;
 }
 
 std::vector<Metric> NvmlCollector::Collect() {
@@ -44,11 +62,10 @@ std::vector<Metric> NvmlCollector::Collect() {
   auto now = std::chrono::system_clock::now().time_since_epoch().count();
 
   nvmlReturn_t result = nvmlDeviceGetPowerUsage(device_handle_, &power_mw);
-
   if (result == NVML_SUCCESS) {
     metrics.push_back({v1::MetricType::METRIC_TYPE_GPU_POWER,
                        {.index = 0},
-                       static_cast<double>(power_mw) / 1000.0,  // mW -> W
+                       static_cast<double>(power_mw) / 1000.0,
                        now});
   }
 
@@ -64,13 +81,11 @@ std::vector<Metric> NvmlCollector::Collect() {
 
   nvmlUtilization_t utilization;
   result = nvmlDeviceGetUtilizationRates(device_handle_, &utilization);
-
   if (result == NVML_SUCCESS) {
     metrics.push_back({v1::MetricType::METRIC_TYPE_GPU_UTILIZATION,
                        {.index = 0},
                        static_cast<double>(utilization.gpu),
                        now});
-
     metrics.push_back(
         {v1::MetricType::METRIC_TYPE_GPU_SHARED_MEMORY_UTILIZATION,
          {.index = 0},
@@ -80,12 +95,12 @@ std::vector<Metric> NvmlCollector::Collect() {
 
   nvmlMemory_t memory;
   result = nvmlDeviceGetMemoryInfo(device_handle_, &memory);
-
   if (result == NVML_SUCCESS) {
-    metrics.push_back({v1::MetricType::METRIC_TYPE_GPU_VRAM_USED,
-                       {.index = 0},
-                       static_cast<double>(memory.used),
-                       now});
+    metrics.push_back(
+        {v1::MetricType::METRIC_TYPE_GPU_VRAM_USED,
+         {.index = 0},
+         static_cast<double>(memory.used) / static_cast<double>(memory.total),
+         now});
   }
 
   return metrics;

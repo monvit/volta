@@ -9,13 +9,17 @@ namespace volta {
 namespace agent {
 namespace collectors {
 
-class NvmlCollector : public Collector {
+class NvmlCollector : public RegisteredCollector<NvmlCollector> {
  public:
   NvmlCollector();
   ~NvmlCollector() override;
 
+  NvmlCollector(NvmlCollector&&) = default;
+  NvmlCollector& operator=(NvmlCollector&&) = default;
+
   bool Init() override;
   std::vector<Metric> Collect() override;
+  bool IsSupported() override;
   std::vector<v1::MetricType> Satisfiable() override;
 
  private:

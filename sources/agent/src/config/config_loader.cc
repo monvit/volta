@@ -45,20 +45,21 @@ Config ConfigLoader::LoadDefaultConfig() {
   CollectorConfig nvml_collector;
   nvml_collector.enabled = true;
   nvml_collector.metrics = {
-      {"gpu_utilization", true},
-      {"memory_utilization", true},
-      {"temperature", true},
+      {v1::MetricType::METRIC_TYPE_GPU_UTILIZATION, true},
+      {v1::MetricType::METRIC_TYPE_GPU_SHARED_MEMORY_UTILIZATION, true},
+      {v1::MetricType::METRIC_TYPE_GPU_TEMPERATURE, true},
   };
   config.collectors[CollectorNames::kNvml] = nvml_collector;
 
   CollectorConfig proc_stat_config;
   proc_stat_config.enabled = true;
-  proc_stat_config.metrics["cpu_usage_percent"] = true;
+  proc_stat_config.metrics[v1::MetricType::METRIC_TYPE_CPU_UTILIZATION] = true;
   config.collectors[CollectorNames::kProcStat] = proc_stat_config;
 
   CollectorConfig rapl_collector;
   rapl_collector.enabled = true;
-  rapl_collector.metrics = {{"cpu_energy_usage_total", true}};
+  rapl_collector.metrics = {
+      {v1::MetricType::METRIC_TYPE_CPU_POWER_PACKAGE, true}};
   config.collectors[CollectorNames::kRapl] = rapl_collector;
 
   return config;

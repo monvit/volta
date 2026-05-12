@@ -7,13 +7,14 @@ namespace volta {
 namespace agent {
 namespace collectors {
 
-class RaplCollector : public Collector {
+class RaplCollector : public RegisteredCollector<RaplCollector> {
  public:
   RaplCollector();
-  // ~RaplCollector() override;
   RaplCollector(const RaplCollector&) = delete;
   RaplCollector& operator=(const RaplCollector&) = delete;
+  bool Init() override;
   std::vector<Metric> Collect() override;
+  bool IsSupported() override;
   std::vector<v1::MetricType> Satisfiable() override;
   ~RaplCollector();
 
