@@ -25,9 +25,9 @@ class RaplCollector : public RegisteredCollector<RaplCollector> {
   void CloseMSR(int fd);
   std::vector<v1::MetricType> requested_metrics_;
   bool initialized_ = false;
-  double power_units_, energy_units_, time_units_;
+  double power_units_ = 0, energy_units_ = 0, time_units_ = 0;
   std::vector<int> MSR_files_;
-  double last_value;
+  double last_value = 0;
 
   class MSR_Read_Exception : std::exception {};
   class MSR_Open_Exception : std::exception {};
