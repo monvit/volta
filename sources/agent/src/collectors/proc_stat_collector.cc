@@ -12,7 +12,7 @@ namespace collectors {
 bool ProcStatCollector::Init() { return true; }
 
 void ProcStatCollector::SetRequestedMetrics(
-    const std::vector<v1::MetricType>& metrics) {
+    const std::vector<MetricType>& metrics) {
   requested_metrics_ = metrics;
 }
 
@@ -20,7 +20,7 @@ std::vector<Metric> ProcStatCollector::Collect() {
   if (requested_metrics_.empty()) return {};
 
   if (std::find(requested_metrics_.begin(), requested_metrics_.end(),
-                v1::MetricType::METRIC_TYPE_CPU_UTILIZATION) ==
+                MetricType::METRIC_TYPE_CPU_UTILIZATION) ==
       requested_metrics_.end()) {
     return {};
   }
@@ -42,7 +42,7 @@ std::vector<Metric> ProcStatCollector::Collect() {
   prev_idle_ = current_idle;
 
   Metric m;
-  m.type = v1::MetricType::METRIC_TYPE_CPU_UTILIZATION;
+  m.type = MetricType::METRIC_TYPE_CPU_UTILIZATION;
   m.devId = {};
   m.value = usage_percent;
   m.timestamp = std::chrono::duration_cast<std::chrono::milliseconds>(
@@ -56,8 +56,8 @@ bool ProcStatCollector::IsSupported() {
   return std::filesystem::exists("/proc/stat");
 }
 
-std::vector<v1::MetricType> ProcStatCollector::Satisfiable() {
-  return {v1::MetricType::METRIC_TYPE_CPU_UTILIZATION};
+std::vector<MetricType> ProcStatCollector::Satisfiable() {
+  return {MetricType::METRIC_TYPE_CPU_UTILIZATION};
 }
 
 void ProcStatCollector::ReadCpuStats(uint64_t& total, uint64_t& idle) {

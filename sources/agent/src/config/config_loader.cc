@@ -12,9 +12,6 @@
 
 #include "utils/utils.h"
 
-namespace utils = volta::agent::utils;
-namespace v1 = volta::v1;
-
 namespace volta {
 namespace agent {
 namespace config {
@@ -39,41 +36,41 @@ Config ConfigLoader::LoadDefaultConfig() {
 
   // request all metrics by default for now
   config.requestedMetrics = {
-      v1::MetricType::METRIC_TYPE_UNSPECIFIED,
-      v1::MetricType::METRIC_TYPE_CPU_POWER_PACKAGE,
-      v1::MetricType::METRIC_TYPE_CPU_POWER_CORES,
-      v1::MetricType::METRIC_TYPE_CPU_CLOCK_SPEED,
-      v1::MetricType::METRIC_TYPE_CPU_UTILIZATION,
-      v1::MetricType::METRIC_TYPE_CPU_TEMPERATURE,
-      v1::MetricType::METRIC_TYPE_CPU_IOWAIT,
-      v1::MetricType::METRIC_TYPE_CPU_CACHE_HIT_RATIO,
-      v1::MetricType::METRIC_TYPE_CPU_ACTIVE_PROCESSES,
-      v1::MetricType::METRIC_TYPE_GPU_POWER,
-      v1::MetricType::METRIC_TYPE_GPU_CLOCK_SPEED,
-      v1::MetricType::METRIC_TYPE_GPU_UTILIZATION,
-      v1::MetricType::METRIC_TYPE_GPU_TEMPERATURE,
-      v1::MetricType::METRIC_TYPE_GPU_VRAM_USED,
-      v1::MetricType::METRIC_TYPE_GPU_PCIE_BANDWIDTH,
-      v1::MetricType::METRIC_TYPE_GPU_COMPUTE_UNIT_UTILIZATION,
-      v1::MetricType::METRIC_TYPE_GPU_SHARED_MEMORY_UTILIZATION,
-      v1::MetricType::METRIC_TYPE_GPU_REGISTER_UTILIZATION,
-      v1::MetricType::METRIC_TYPE_RAM_POWER,
-      v1::MetricType::METRIC_TYPE_RAM_TOTAL,
-      v1::MetricType::METRIC_TYPE_RAM_AVAILABLE,
-      v1::MetricType::METRIC_TYPE_RAM_USED,
-      v1::MetricType::METRIC_TYPE_RAM_CACHED,
-      v1::MetricType::METRIC_TYPE_SWAP_USED,
-      v1::MetricType::METRIC_TYPE_SWAP_ACTIVITY,
-      v1::MetricType::METRIC_TYPE_DISK_READ_THROUGHPUT,
-      v1::MetricType::METRIC_TYPE_DISK_WRITE_THROUGHPUT,
-      v1::MetricType::METRIC_TYPE_DISK_READ_IOPS,
-      v1::MetricType::METRIC_TYPE_DISK_WRITE_IOPS,
-      v1::MetricType::METRIC_TYPE_DISK_BUSY_TIME,
-      v1::MetricType::METRIC_TYPE_DISK_CAPACITY_USED,
-      v1::MetricType::METRIC_TYPE_NET_BYTES_RECEIVED,
-      v1::MetricType::METRIC_TYPE_NET_BYTES_SENT,
-      v1::MetricType::METRIC_TYPE_NET_PACKETS_RECEIVED,
-      v1::MetricType::METRIC_TYPE_NET_PACKETS_SENT,
+      MetricType::METRIC_TYPE_UNSPECIFIED,
+      MetricType::METRIC_TYPE_CPU_POWER_PACKAGE,
+      MetricType::METRIC_TYPE_CPU_POWER_CORES,
+      MetricType::METRIC_TYPE_CPU_CLOCK_SPEED,
+      MetricType::METRIC_TYPE_CPU_UTILIZATION,
+      MetricType::METRIC_TYPE_CPU_TEMPERATURE,
+      MetricType::METRIC_TYPE_CPU_IOWAIT,
+      MetricType::METRIC_TYPE_CPU_CACHE_HIT_RATIO,
+      MetricType::METRIC_TYPE_CPU_ACTIVE_PROCESSES,
+      MetricType::METRIC_TYPE_GPU_POWER,
+      MetricType::METRIC_TYPE_GPU_CLOCK_SPEED,
+      MetricType::METRIC_TYPE_GPU_UTILIZATION,
+      MetricType::METRIC_TYPE_GPU_TEMPERATURE,
+      MetricType::METRIC_TYPE_GPU_VRAM_USED,
+      MetricType::METRIC_TYPE_GPU_PCIE_BANDWIDTH,
+      MetricType::METRIC_TYPE_GPU_COMPUTE_UNIT_UTILIZATION,
+      MetricType::METRIC_TYPE_GPU_SHARED_MEMORY_UTILIZATION,
+      MetricType::METRIC_TYPE_GPU_REGISTER_UTILIZATION,
+      MetricType::METRIC_TYPE_RAM_POWER,
+      MetricType::METRIC_TYPE_RAM_TOTAL,
+      MetricType::METRIC_TYPE_RAM_AVAILABLE,
+      MetricType::METRIC_TYPE_RAM_USED,
+      MetricType::METRIC_TYPE_RAM_CACHED,
+      MetricType::METRIC_TYPE_SWAP_USED,
+      MetricType::METRIC_TYPE_SWAP_ACTIVITY,
+      MetricType::METRIC_TYPE_DISK_READ_THROUGHPUT,
+      MetricType::METRIC_TYPE_DISK_WRITE_THROUGHPUT,
+      MetricType::METRIC_TYPE_DISK_READ_IOPS,
+      MetricType::METRIC_TYPE_DISK_WRITE_IOPS,
+      MetricType::METRIC_TYPE_DISK_BUSY_TIME,
+      MetricType::METRIC_TYPE_DISK_CAPACITY_USED,
+      MetricType::METRIC_TYPE_NET_BYTES_RECEIVED,
+      MetricType::METRIC_TYPE_NET_BYTES_SENT,
+      MetricType::METRIC_TYPE_NET_PACKETS_RECEIVED,
+      MetricType::METRIC_TYPE_NET_PACKETS_SENT,
   };
 
   return config;
@@ -252,10 +249,10 @@ void ConfigLoader::LoadMetrics(toml::table& tbl, Config& out_config) {
 
   auto metrics_node = tbl["metrics"];
 
-  std::vector<v1::MetricType> metrics;
+  std::vector<MetricType> metrics;
 
-  auto append_metric = [&](v1::MetricType metric) {
-    if (metric == v1::MetricType::METRIC_TYPE_UNSPECIFIED) {
+  auto append_metric = [&](MetricType metric) {
+    if (metric == MetricType::METRIC_TYPE_UNSPECIFIED) {
       return;
     }
     if (std::find(metrics.begin(), metrics.end(), metric) == metrics.end()) {
@@ -264,9 +261,9 @@ void ConfigLoader::LoadMetrics(toml::table& tbl, Config& out_config) {
   };
 
   auto parse_metric_name = [&](const std::string& name,
-                               v1::MetricType& metric) -> bool {
-    if (v1::MetricType_Parse(name, &metric)) return true;
-    if (v1::MetricType_Parse(std::string("METRIC_TYPE_") + name, &metric))
+                               MetricType& metric) -> bool {
+    if (MetricType_Parse(name, &metric)) return true;
+    if (MetricType_Parse(std::string("METRIC_TYPE_") + name, &metric))
       return true;
     return false;
   };
@@ -274,16 +271,16 @@ void ConfigLoader::LoadMetrics(toml::table& tbl, Config& out_config) {
   if (auto arr = metrics_node.as_array()) {
     for (const auto& item : *arr) {
       if (auto metric_num = item.value<int>()) {
-        if (!v1::MetricType_IsValid(*metric_num)) {
+        if (!MetricType_IsValid(*metric_num)) {
           std::cerr << "Invalid metric value: " << *metric_num << std::endl;
           continue;
         }
-        append_metric(static_cast<v1::MetricType>(*metric_num));
+        append_metric(static_cast<MetricType>(*metric_num));
         continue;
       }
 
       if (auto metric_name = item.value<std::string>()) {
-        v1::MetricType metric;
+        MetricType metric;
         if (!parse_metric_name(*metric_name, metric)) {
           std::cerr << "Invalid metric name: " << *metric_name << std::endl;
           continue;
@@ -295,7 +292,7 @@ void ConfigLoader::LoadMetrics(toml::table& tbl, Config& out_config) {
       std::cerr << "Invalid metric entry type" << std::endl;
     }
   } else if (auto val = metrics_node.value<std::string>()) {
-    v1::MetricType metric;
+    MetricType metric;
     if (parse_metric_name(*val, metric)) {
       append_metric(metric);
     } else {

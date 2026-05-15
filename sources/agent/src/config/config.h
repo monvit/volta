@@ -58,7 +58,7 @@ struct Config {
   cpu_set_t core_affinity = kDefaultAffinity;
   std::string server_address = kDefaultServerAddress;
   uint16_t server_port = kDefaultServerPort;
-  std::vector<v1::MetricType> requestedMetrics;
+  std::vector<MetricType> requestedMetrics;
 };
 
 }  // namespace config

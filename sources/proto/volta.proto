@@ -2,7 +2,7 @@ syntax = "proto3";
 
 import "google/protobuf/timestamp.proto";
 
-package volta.v1;
+package volta;
 
 
 enum MetricType {
@@ -52,6 +52,7 @@ enum MetricType {
   METRIC_TYPE_NET_PACKETS_RECEIVED = 502;
   METRIC_TYPE_NET_PACKETS_SENT = 503;
 }
+
 
 service VoltaCollector {
   rpc CollectMetrics(stream MetricBatch) returns (CollectResponse);

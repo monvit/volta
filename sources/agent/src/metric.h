@@ -19,7 +19,7 @@ struct DeviceId {
 };
 
 struct Metric {
-  v1::MetricType type;
+  MetricType type;
   DeviceId devId;
   double value;
   int64_t timestamp;

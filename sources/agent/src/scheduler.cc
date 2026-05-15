@@ -44,7 +44,7 @@ void Scheduler::PrintDashboard(const std::vector<Metric>& metrics) {
   std::cout << "-----------------------------------------------\n";
 
   for (const auto& m : metrics) {
-    std::cout << std::left << std::setw(30) << v1::MetricType_Name(m.type)
+    std::cout << std::left << std::setw(30) << MetricType_Name(m.type)
               << std::fixed << std::setprecision(2) << m.value << "\n";
   }
 
