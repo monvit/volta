@@ -7,16 +7,16 @@
 namespace volta {
 namespace agent {
 
-Scheduler::Scheduler(
-    const config::Config& config,
-    std::vector<std::unique_ptr<collectors::Collector>>&& collectors)
+Scheduler::Scheduler(const config::Config& config,
+                     std::vector<collectors::Collector*>&& collectors)
     : config_(config), collectors_(std::move(collectors)) {}
 
 void Scheduler::Run() {
+  for (auto collector : collectors_) {
+    collector->Init();
+  }
   std::cout << "[" << config_.uuid << "] Starting collection loop (Interval: "
             << config_.collection_interval.count() << "ms)..." << std::endl;
-
-  std::this_thread::sleep_for(config_.collection_interval);
 
   while (true) {
     std::vector<Metric> batch;
@@ -39,17 +39,19 @@ void Scheduler::PrintDashboard(const std::vector<Metric>& metrics) {
   std::cout << "    VOLTA AGENT v0.1 (POC) - ACTIVE MONITOR    \n";
   std::cout << "===============================================\n";
 
-  std::cout << std::left << std::setw(30) << "METRIC NAME" << "VALUE\n";
+  std::cout << std::left << std::setw(30) << "METRIC NAME"
+            << "VALUE\n";
   std::cout << "-----------------------------------------------\n";
 
   for (const auto& m : metrics) {
-    std::cout << std::left << std::setw(30) << m.name << std::fixed
-              << std::setprecision(2) << m.value << "\n";
+    std::cout << std::left << std::setw(30) << v1::MetricType_Name(m.type)
+              << std::fixed << std::setprecision(2) << m.value << "\n";
   }
 
   std::cout << "-----------------------------------------------\n";
   std::cout << "Data points collected: " << metrics.size() << "\n";
-  std::cout << "Press Ctrl+C to exit." << "\n";
+  std::cout << "Press Ctrl+C to exit."
+            << "\n";
   std::cout.flush();
 }
 

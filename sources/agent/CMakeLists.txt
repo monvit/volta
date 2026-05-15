@@ -20,19 +20,21 @@ find_package(Threads REQUIRED)
 # --- Proto / gRPC code generation ---
 set(PROTO_DIR ${CMAKE_SOURCE_DIR}/../proto)
 set(PROTO_FILE ${PROTO_DIR}/volta.proto)
+set(GENERATED_DIR ${CMAKE_SOURCE_DIR}/gen)
 
 get_target_property(GRPC_CPP_PLUGIN gRPC::grpc_cpp_plugin LOCATION)
 
-set(PROTO_SRC "${CMAKE_CURRENT_BINARY_DIR}/volta.pb.cc")
-set(PROTO_HDR "${CMAKE_CURRENT_BINARY_DIR}/volta.pb.h")
-set(GRPC_SRC  "${CMAKE_CURRENT_BINARY_DIR}/volta.grpc.pb.cc")
-set(GRPC_HDR  "${CMAKE_CURRENT_BINARY_DIR}/volta.grpc.pb.h")
+set(PROTO_SRC "${GENERATED_DIR}/volta.pb.cc")
+set(PROTO_HDR "${GENERATED_DIR}/volta.pb.h")
+set(GRPC_SRC  "${GENERATED_DIR}/volta.grpc.pb.cc")
+set(GRPC_HDR  "${GENERATED_DIR}/volta.grpc.pb.h")
 
 add_custom_command(
     OUTPUT  "${PROTO_SRC}" "${PROTO_HDR}" "${GRPC_SRC}" "${GRPC_HDR}"
+    COMMAND ${CMAKE_COMMAND} -E make_directory ${GENERATED_DIR}
     COMMAND protobuf::protoc
-    ARGS    --cpp_out="${CMAKE_CURRENT_BINARY_DIR}"
-            --grpc_out="${CMAKE_CURRENT_BINARY_DIR}"
+    ARGS    --cpp_out="${GENERATED_DIR}"
+            --grpc_out="${GENERATED_DIR}"
             --plugin=protoc-gen-grpc="${GRPC_CPP_PLUGIN}"
             -I "${PROTO_DIR}"
             "${PROTO_FILE}"
@@ -42,7 +44,7 @@ add_custom_command(
 
 add_library(volta_proto STATIC ${PROTO_SRC} ${PROTO_HDR} ${GRPC_SRC} ${GRPC_HDR})
 
-target_include_directories(volta_proto PUBLIC ${CMAKE_CURRENT_BINARY_DIR})
+target_include_directories(volta_proto PUBLIC ${GENERATED_DIR})
 
 target_link_libraries(volta_proto PUBLIC
     protobuf::libprotobuf

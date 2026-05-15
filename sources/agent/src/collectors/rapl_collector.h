@@ -7,23 +7,27 @@ namespace volta {
 namespace agent {
 namespace collectors {
 
-class RaplCollector : public Collector {
+class RaplCollector : public RegisteredCollector<RaplCollector> {
  public:
   RaplCollector();
-  // ~RaplCollector() override;
   RaplCollector(const RaplCollector&) = delete;
   RaplCollector& operator=(const RaplCollector&) = delete;
+  bool Init() override;
   std::vector<Metric> Collect() override;
+  bool IsSupported() override;
+  std::vector<v1::MetricType> Satisfiable() override;
+  void SetRequestedMetrics(const std::vector<v1::MetricType>& metrics) override;
   ~RaplCollector();
 
  private:
   uint64_t ReadMSR(uint8_t core, uint32_t offset);
   void OpenMSR();
   void CloseMSR(int fd);
+  std::vector<v1::MetricType> requested_metrics_;
   bool initialized_ = false;
-  double power_units_, energy_units_, time_units_;
+  double power_units_ = 0, energy_units_ = 0, time_units_ = 0;
   std::vector<int> MSR_files_;
-  double last_value;
+  double last_value = 0;
 
   class MSR_Read_Exception : std::exception {};
   class MSR_Open_Exception : std::exception {};

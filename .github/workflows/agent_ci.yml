@@ -4,12 +4,12 @@ on:
   push:
     branches: [ "main", "devel" ]
     paths:
-      - 'sources/agent/'
+      - 'sources/agent/**'
       - '.github/workflows/agent_ci.yml'
   pull_request:
     branches: [ "main", "devel" ]
     paths:
-      - 'sources/agent/'
+      - 'sources/agent/**'
       - '.github/workflows/agent_ci.yml'
 
 jobs:
@@ -62,4 +62,5 @@ jobs:
         --inline-suppr \
         --force \
         -i sources/agent/build \
+        -i sources/agent/gen \
         sources/agent
