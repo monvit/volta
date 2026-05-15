@@ -2,48 +2,55 @@ package main
 
 import (
 	"fmt"
+	"net"
+	"net/http"
 	"os"
 
-	b "github.com/monvit/volta/sources/server/internal/broker"
+	chi "github.com/go-chi/chi/v5"
 	cfg "github.com/monvit/volta/sources/server/internal/config"
-	g "github.com/monvit/volta/sources/server/internal/gateway"
+	gs "github.com/monvit/volta/sources/server/internal/grpc"
 	log "github.com/monvit/volta/sources/server/internal/logger"
-	s "github.com/monvit/volta/sources/server/internal/server"
+	r "github.com/monvit/volta/sources/server/internal/registry"
+	"github.com/monvit/volta/sources/server/pb"
+	"google.golang.org/grpc"
 )
 
 func main() {
+	// logger
 	if err := log.Init(); err != nil {
-		fmt.Print(err)
+		log.Error("logger: %v", err)
 		os.Exit(1)
 	}
 
-	result, err := cfg.Load()
+	// config
+	cfg, err := cfg.Load()
 	if err != nil {
-		log.Errorf("config: %v", err)
+		log.Error("config: %v", err)
 		os.Exit(1)
 	}
 
-	for _, w := range result.Warnings {
-		log.Warnf("config: %v", w)
+	log.SetLevel(cfg.Log.Level)
+	log.Info("starting server with config: %+v", cfg)
+
+	registry := &r.AgentRegistry{}
+
+	// gRPC
+	grpcSrv := grpc.NewServer()
+	pb.RegisterVoltaCollectorServer(grpcSrv, gs.New(registry))
+
+	grpcListener, err := net.Listen("tcp", fmt.Sprintf("%v:%v", cfg.GRPC.Addr, cfg.GRPC.Port))
+	if err != nil {
+		log.Error("listen error: %v", err)
+		os.Exit(1)
 	}
 
-	config := result.Config
-	broker := b.New()
-	server := s.New(config, broker)
-	gateway := g.New(broker, server, server)
+	go grpcSrv.Serve(grpcListener)
 
-	// TODO: handle errors and restarts
-	// temporary solution
-	run := func(name string, fn func() error) {
-		for {
-			if err := fn(); err != nil {
-				log.Errorf("%s error: %v, restarting...", name, err)
-			}
-		}
-	}
-
-	go run("gateway", func() error { return gateway.Run(config.RESTAddr, config.RESTPort) })
-	go run("grpc", func() error { return s.Run(config.GRPCAddr, config.GRPCPort, server) })
-
-	select {}
+	// HTTP / REST / WebSocket
+	mux := chi.NewRouter()
+	// mux.Get("/api/agents", srv.handleListAgents)
+	// mux.Post("/api/agents/{id}/stream", srv.handleStreamData)
+	// mux.Post("/api/agents/{id}/send", srv.handleSendData)
+	// mux.Get("/ws", hub.HandleWS)
+	http.ListenAndServe(":8080", mux)
 }

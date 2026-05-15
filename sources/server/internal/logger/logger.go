@@ -17,7 +17,7 @@ const (
 	gray   = "\033[90m"
 )
 
-type Level int
+type Level uint
 
 const (
 	DEBUG Level = iota
@@ -41,6 +41,21 @@ func ParseLevel(s string) (Level, error) {
 	}
 }
 
+func LevelToString(l Level) string {
+	switch l {
+	case DEBUG:
+		return "debug"
+	case INFO:
+		return "info"
+	case WARN:
+		return "warn"
+	case ERROR:
+		return "error"
+	default:
+		return "info"
+	}
+}
+
 var (
 	level   = INFO
 	fileOut io.Writer
@@ -53,13 +68,13 @@ func SetLevel(l Level) {
 
 func Init() error {
 	if err := os.MkdirAll("logs", 0755); err != nil {
-		return fmt.Errorf("logger: cannot create logs dir: %w", err)
+		return fmt.Errorf("cannot create logs dir: %w", err)
 	}
 
 	filename := fmt.Sprintf("logs/%s.log", time.Now().Format("2006-01-02_15-04-05"))
 	f, err := os.OpenFile(filename, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
 	if err != nil {
-		return fmt.Errorf("logger: cannot open file %s: %w", filename, err)
+		return fmt.Errorf("cannot open file %s: %w", filename, err)
 	}
 
 	fileOut = f
@@ -87,50 +102,26 @@ func log(color, label, format string, args ...any) {
 	}
 }
 
-func Debugf(format string, args ...any) {
+func Debug(format string, args ...any) {
 	if level <= DEBUG {
 		log(gray, "[DBG]", format, args...)
 	}
 }
 
-func Infof(format string, args ...any) {
+func Info(format string, args ...any) {
 	if level <= INFO {
 		log(blue, "[INF]", format, args...)
 	}
 }
 
-func Warnf(format string, args ...any) {
+func Warn(format string, args ...any) {
 	if level <= WARN {
 		log(yellow, "[WRN]", format, args...)
 	}
 }
 
-func Errorf(format string, args ...any) {
+func Error(format string, args ...any) {
 	if level <= ERROR {
 		log(red, "[ERR]", format, args...)
-	}
-}
-
-func Debug(str string) {
-	if level <= DEBUG {
-		log(gray, "[DBG]", "%v", str)
-	}
-}
-
-func Info(str string) {
-	if level <= INFO {
-		log(blue, "[INF]", "%v", str)
-	}
-}
-
-func Warn(str string) {
-	if level <= WARN {
-		log(yellow, "[WRN]", "%v", str)
-	}
-}
-
-func Error(err error) {
-	if level <= ERROR {
-		log(red, "[ERR]", "%v", err)
 	}
 }
