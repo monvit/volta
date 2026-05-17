@@ -14,7 +14,7 @@ import (
 	"github.com/knadh/koanf/v2"
 	flag "github.com/spf13/pflag"
 
-	log "github.com/monvit/volta/sources/server/internal/logger"
+	"github.com/monvit/volta/sources/server/internal/logger"
 )
 
 const (
@@ -22,7 +22,7 @@ const (
 	GRPCPORT_DEFAULT = 5000
 	RESTPORT_DEFAULT = 8080
 	BUFSIZE_DEFAULT  = 16
-	LOGLEVEL_DEFAULT = log.INFO
+	LOGLEVEL_DEFAULT = logger.INFO
 
 	SYS_CONF   = "/etc/volta/server.conf"
 	LOCAL_CONF = "server.conf"
@@ -51,7 +51,7 @@ type BufferConfig struct {
 }
 
 type LogConfig struct {
-	Level log.Level `koanf:"level"`
+	Level logger.Level `koanf:"level"`
 }
 
 func Default() *Config {
@@ -81,7 +81,7 @@ func Load() (*Config, error) {
 	// system config
 	if err := k.Load(file.Provider(SYS_CONF), toml.Parser()); err != nil {
 		if os.IsNotExist(err) {
-			log.Warn("sys config not found, skipping")
+			logger.Warn("sys config not found, skipping")
 		} else {
 			errs = append(errs, fmt.Errorf("sys config: %w", err))
 		}
@@ -90,7 +90,7 @@ func Load() (*Config, error) {
 	// local config
 	if err := k.Load(file.Provider(LOCAL_CONF), toml.Parser()); err != nil {
 		if os.IsNotExist(err) {
-			log.Warn("local config not found, skipping")
+			logger.Warn("local config not found, skipping")
 		} else {
 			errs = append(errs, fmt.Errorf("local config: %w", err))
 		}
@@ -99,7 +99,7 @@ func Load() (*Config, error) {
 	// loading .env
 	if err := godotenv.Load(ENV_CONF); err != nil {
 		if os.IsNotExist(err) {
-			log.Warn(".env file not found, skipping")
+			logger.Warn(".env file not found, skipping")
 		} else {
 			errs = append(errs, fmt.Errorf(".env: %w", err))
 		}
@@ -120,7 +120,7 @@ func Load() (*Config, error) {
 	f.String("rest-addr", ADDR_DEFAULT, "")
 	f.Uint("rest-port", RESTPORT_DEFAULT, "")
 	f.Uint("buf-size", BUFSIZE_DEFAULT, "")
-	f.String("log-level", log.LevelToString(LOGLEVEL_DEFAULT), "")
+	f.String("log-level", logger.LevelToString(LOGLEVEL_DEFAULT), "")
 
 	if err := f.Parse(os.Args[1:]); err != nil {
 		errs = append(errs, fmt.Errorf("flags: %w", err))

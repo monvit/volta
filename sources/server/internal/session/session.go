@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 
+	controlmessage "github.com/monvit/volta/sources/server/internal/controlMessage"
 	log "github.com/monvit/volta/sources/server/internal/logger"
 	pb "github.com/monvit/volta/sources/server/pb"
 	pbt "github.com/monvit/volta/sources/server/pb/types"
@@ -43,6 +44,16 @@ func (s *AgentSession) Run() {
 
 	if err := eg.Wait(); err != nil {
 		log.Error("Session[%v]: %v", s.ID, err)
+	}
+}
+
+func (s *AgentSession) Send(msg *pbt.ControlMessage) error {
+	// TODO: aliases for control messages, so that not every message could be sent?
+	select {
+	case s.sendCh <- msg:
+		return nil
+	case <-s.ctx.Done():
+		return fmt.Errorf("agent %s disconnected", s.ID)
 	}
 }
 
@@ -85,18 +96,11 @@ func (s *AgentSession) handleMessage(msg *pbt.ControlMessage) error {
 	case pbt.MessageType_MESSAGE_ERROR:
 		log.Error("(Connect) received error from agent %v: %v", s.ID, msg.GetPayload())
 	case pbt.MessageType_MESSAGE_PING:
-		s.sendCh <- &pbt.ControlMessage{
-			Type: pbt.MessageType_MESSAGE_PONG,
-		}
+		s.sendCh <- controlmessage.New(pbt.MessageType_MESSAGE_PONG)
 	case pbt.MessageType_MESSAGE_PONG:
 		// TODO: measure latency? monitor ping responses
 	case pbt.MessageType_MESSAGE_SEND_DATA, pbt.MessageType_MESSAGE_STREAM_DATA:
-		s.sendCh <- &pbt.ControlMessage{
-			Type: pbt.MessageType_MESSAGE_ERROR,
-			Request: &pbt.ControlMessage_Payload{
-				Payload: fmt.Sprintf("%v is only for agents", msg.Type.String()),
-			},
-		}
+		s.sendCh <- controlmessage.New(pbt.MessageType_MESSAGE_ERROR, controlmessage.WithPayload(fmt.Sprintf("%v is only for agents", msg.Type.String())))
 	case pbt.MessageType_MESSAGE_ID:
 		// TODO
 	case pbt.MessageType_MESSAGE_UNKNOWN:
