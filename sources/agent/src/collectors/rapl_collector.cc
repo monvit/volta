@@ -76,7 +76,10 @@ std::vector<Metric> RaplCollector::Collect() {
   double value = energy_units_ * readout;
   Metric m;
   m.type = MetricType::METRIC_TYPE_CPU_POWER_PACKAGE;
-  m.devId = {};
+  CpuID cpu_id;
+  cpu_id.set_socket_index(0);
+  cpu_id.set_core_index(0);
+  m.devId = DeviceId{std::move(cpu_id)};
   m.value = value - last_value;
   m.timestamp = std::chrono::system_clock::now().time_since_epoch().count();
   last_value = value;

@@ -27,6 +27,7 @@ class NvmlCollector : public RegisteredCollector<NvmlCollector> {
 
  private:
   std::vector<MetricType> requested_metrics_;
+  std::optional<GpuID> gpu_id_;
 
   nvmlDevice_t device_handle_;
   bool initialized_ = false;

@@ -37,14 +37,12 @@ std::vector<Metric> RamCollector::Collect() {
   auto now = std::chrono::system_clock::now().time_since_epoch().count();
   std::vector<Metric> metrics;
   if (needs_total) {
-    metrics.push_back({MetricType::METRIC_TYPE_RAM_TOTAL,
-                       {.name = "ram"},
-                       (double)total,
-                       now});
+    metrics.push_back(
+        {MetricType::METRIC_TYPE_RAM_TOTAL, std::nullopt, (double)total, now});
   }
   if (needs_used) {
     metrics.push_back(
-        {MetricType::METRIC_TYPE_RAM_USED, {.name = "ram"}, (double)used, now});
+        {MetricType::METRIC_TYPE_RAM_USED, std::nullopt, (double)used, now});
   }
   return metrics;
 }

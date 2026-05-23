@@ -43,7 +43,7 @@ std::vector<Metric> ProcStatCollector::Collect() {
 
   Metric m;
   m.type = MetricType::METRIC_TYPE_CPU_UTILIZATION;
-  m.devId = {};
+  m.devId = std::nullopt;
   m.value = usage_percent;
   m.timestamp = std::chrono::duration_cast<std::chrono::milliseconds>(
                     std::chrono::system_clock::now().time_since_epoch())

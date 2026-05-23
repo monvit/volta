@@ -1,5 +1,7 @@
 #include "collectors/nvml_collector.h"
 
+#include <dlfcn.h>
+
 #include <algorithm>
 #include <chrono>
 #include <iostream>
@@ -31,6 +33,22 @@ bool NvmlCollector::Init() {
     nvmlShutdown();
     return false;
   }
+
+  nvmlPciInfo_t pci_info;
+  result = nvmlDeviceGetPciInfo(device_handle_, &pci_info);
+  if (result != NVML_SUCCESS) {
+    std::cerr << "Failed to get PCI info: " << nvmlErrorString(result)
+              << std::endl;
+    nvmlShutdown();
+    return false;
+  }
+
+  GpuID gpu_id;
+  gpu_id.set_pci_domain(pci_info.domain);
+  gpu_id.set_pci_bus(pci_info.bus);
+  gpu_id.set_pci_device(pci_info.device);
+  gpu_id.set_pci_function(0);
+  gpu_id_ = std::move(gpu_id);
 
   initialized_ = true;
   return true;
@@ -76,10 +94,8 @@ std::vector<Metric> NvmlCollector::Collect() {
   if (needs(MetricType::METRIC_TYPE_GPU_POWER)) {
     result = nvmlDeviceGetPowerUsage(device_handle_, &power_mw);
     if (result == NVML_SUCCESS) {
-      metrics.push_back({MetricType::METRIC_TYPE_GPU_POWER,
-                         {.index = 0},
-                         static_cast<double>(power_mw) / 1000.0,
-                         now});
+      metrics.push_back({MetricType::METRIC_TYPE_GPU_POWER, gpu_id_,
+                         static_cast<double>(power_mw) / 1000.0, now});
     }
   }
 
@@ -88,10 +104,8 @@ std::vector<Metric> NvmlCollector::Collect() {
     result =
         nvmlDeviceGetTemperature(device_handle_, NVML_TEMPERATURE_GPU, &temp_c);
     if (result == NVML_SUCCESS) {
-      metrics.push_back({MetricType::METRIC_TYPE_GPU_TEMPERATURE,
-                         {.index = 0},
-                         static_cast<double>(temp_c),
-                         now});
+      metrics.push_back({MetricType::METRIC_TYPE_GPU_TEMPERATURE, gpu_id_,
+                         static_cast<double>(temp_c), now});
     }
   }
 
@@ -101,17 +115,13 @@ std::vector<Metric> NvmlCollector::Collect() {
     result = nvmlDeviceGetUtilizationRates(device_handle_, &utilization);
     if (result == NVML_SUCCESS) {
       if (needs(MetricType::METRIC_TYPE_GPU_UTILIZATION)) {
-        metrics.push_back({MetricType::METRIC_TYPE_GPU_UTILIZATION,
-                           {.index = 0},
-                           static_cast<double>(utilization.gpu),
-                           now});
+        metrics.push_back({MetricType::METRIC_TYPE_GPU_UTILIZATION, gpu_id_,
+                           static_cast<double>(utilization.gpu), now});
       }
       if (needs(MetricType::METRIC_TYPE_GPU_SHARED_MEMORY_UTILIZATION)) {
         metrics.push_back(
-            {MetricType::METRIC_TYPE_GPU_SHARED_MEMORY_UTILIZATION,
-             {.index = 0},
-             static_cast<double>(utilization.memory),
-             now});
+            {MetricType::METRIC_TYPE_GPU_SHARED_MEMORY_UTILIZATION, gpu_id_,
+             static_cast<double>(utilization.memory), now});
       }
     }
   }
@@ -121,8 +131,7 @@ std::vector<Metric> NvmlCollector::Collect() {
     result = nvmlDeviceGetMemoryInfo(device_handle_, &memory);
     if (result == NVML_SUCCESS) {
       metrics.push_back(
-          {MetricType::METRIC_TYPE_GPU_VRAM_USED,
-           {.index = 0},
+          {MetricType::METRIC_TYPE_GPU_VRAM_USED, gpu_id_,
            static_cast<double>(memory.used) / static_cast<double>(memory.total),
            now});
     }

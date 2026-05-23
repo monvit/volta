@@ -3,26 +3,22 @@
 
 #include <cstdint>
 #include <optional>
-#include <string>
+#include <variant>
 
 #include "volta.pb.h"
 
 namespace volta {
 namespace agent {
 
-struct DeviceId {
-  std::optional<std::string>
-      uuid;  // device UUID from NVML/ROCm, disk serial, etc.
-  std::optional<std::string> name;  // Human-readable: "sda", "eth0", "GPU 0"
-  std::optional<uint32_t> index;    // 0-based index (GPU slot, CPU core, etc.)
-  std::optional<std::string> vendor;  // "nvidia" | "amd" | "intel"
-};
+using DeviceId = std::variant<GpuID, CpuID, NetInterfaceID, DiskID>;
 
 struct Metric {
-  MetricType type;
-  DeviceId devId;
-  double value;
-  int64_t timestamp;
+  MetricType type = MetricType::METRIC_TYPE_UNSPECIFIED;
+  std::optional<DeviceId> devId;
+  double value = 0.0;
+  int64_t timestamp = 0;
+
+  bool HasDevice() const { return devId.has_value(); }
 };
 
 }  // namespace agent
