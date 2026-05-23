@@ -54,16 +54,45 @@ enum MetricType {
 }
 
 
-service VoltaCollector {
-  rpc CollectMetrics(stream MetricBatch) returns (CollectResponse);
+message GpuID {
+  uint32 pci_domain = 1;
+  uint32 pci_bus = 2;
+  uint32 pci_device = 3;
+  uint32 pci_function = 4;
 }
 
-message MetricBatch {
-  google.protobuf.Timestamp timestamp = 1;
+message CpuID {
+  uint32 socket_index = 1;
+  uint32 core_index = 2;
+}
 
-  string hostname = 2;
+message NetInterfaceID {
+  uint32 ifindex = 1;
+}
 
-  map<string, double> metrics = 3;
+message DiskID {
+  uint32 major = 1;
+  uint32 minor = 2;
+}
+
+message DeviceID {
+  oneof device {
+    GpuID gpu = 1;
+    CpuID cpu = 2;
+    NetInterfaceID network = 3;
+    DiskID disk = 4;
+  }
+}
+
+message MetricObservation {
+  MetricType metric_type = 1;
+  DeviceID device_id = 2;
+  google.protobuf.Timestamp timestamp = 3;
+  double value = 4;
+}
+
+service VoltaCollector {
+  rpc CollectMetrics(stream MetricObservation) returns (CollectResponse);
 }
 
 message CollectResponse {
