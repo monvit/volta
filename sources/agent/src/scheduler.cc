@@ -2,6 +2,7 @@
 
 #include <iomanip>
 #include <iostream>
+#include <sstream>
 #include <thread>
 
 namespace volta {
@@ -9,7 +10,7 @@ namespace agent {
 
 Scheduler::Scheduler(const config::Config& config,
                      std::vector<collectors::Collector*>&& collectors)
-    : config_(config), collectors_(std::move(collectors)) {}
+    : collectors_(std::move(collectors)), config_(config), buffer_(1) {}
 
 void Scheduler::Run() {
   for (auto collector : collectors_) {
@@ -19,37 +20,67 @@ void Scheduler::Run() {
             << config_.collection_interval.count() << "ms)..." << std::endl;
 
   while (true) {
-    std::vector<Metric> batch;
     for (const auto& collector : collectors_) {
       auto metrics = collector->Collect();
-      batch.insert(batch.end(), metrics.begin(), metrics.end());
+      for (const auto& metric : metrics) {
+        buffer_.AddMetric(metric);
+      }
     }
 
-    PrintDashboard(batch);
+    PrintDashboard();
 
     std::this_thread::sleep_for(config_.collection_interval);
   }
 }
 
-void Scheduler::PrintDashboard(const std::vector<Metric>& metrics) {
+std::string Scheduler::DescribeKey(const BufferKey& key) {
+  std::ostringstream out;
+  if (key.pci_domain || key.pci_bus || key.pci_device || key.pci_function) {
+    out << "gpu=" << key.pci_domain << ':' << static_cast<int>(key.pci_bus)
+        << ':' << static_cast<int>(key.pci_device) << '.'
+        << static_cast<int>(key.pci_function);
+  } else if (key.socket_index || key.core_index) {
+    out << "cpu=" << static_cast<int>(key.socket_index) << "/"
+        << key.core_index;
+  } else if (key.ifindex) {
+    out << "net_ifindex=" << key.ifindex;
+  } else if (key.disk_major || key.disk_minor) {
+    out << "disk=" << key.disk_major << ':' << key.disk_minor;
+  } else {
+    out << "system";
+  }
+  return out.str();
+}
+
+void Scheduler::PrintDashboard() {
   // ansi clean screen, move cursor to top-left
   std::cout << "\033[2J\033[1;1H";
 
   std::cout << "===============================================\n";
-  std::cout << "    VOLTA AGENT v0.1 (POC) - ACTIVE MONITOR    \n";
+  std::cout << "    VOLTA AGENT v0.5 - ACTIVE MONITOR    \n";
   std::cout << "===============================================\n";
 
-  std::cout << std::left << std::setw(30) << "METRIC NAME"
-            << "VALUE\n";
+  std::cout << std::left << std::setw(42) << "METRIC NAME"
+            << "    VALUE\n";
   std::cout << "-----------------------------------------------\n";
 
-  for (const auto& m : metrics) {
-    std::cout << std::left << std::setw(30) << MetricType_Name(m.type)
-              << std::fixed << std::setprecision(2) << m.value << "\n";
+  auto latest = buffer_.LatestSamples();
+  for (const auto& [key, sample] : latest) {
+    auto metric_name =
+        MetricType_Name(static_cast<MetricType>(key.metric_type));
+    const std::string prefix = "METRIC_TYPE_";
+    if (metric_name.rfind(prefix, 0) == 0) {
+      metric_name = metric_name.substr(prefix.size());
+    }
+
+    std::cout << std::left << std::setw(42) << metric_name << std::setw(38)
+              << DescribeKey(key) << "    " << std::fixed
+              << std::setprecision(2) << sample.value << " @ "
+              << sample.timestamp_ns << "\n";
   }
 
   std::cout << "-----------------------------------------------\n";
-  std::cout << "Data points collected: " << metrics.size() << "\n";
+  std::cout << "Data points collected: " << latest.size() << "\n";
   std::cout << "Press Ctrl+C to exit."
             << "\n";
   std::cout.flush();

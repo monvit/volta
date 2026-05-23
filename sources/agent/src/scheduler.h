@@ -2,8 +2,10 @@
 #define VOLTA_AGENT_SRC_SCHEDULER_H_
 
 #include <memory>
+#include <string>
 #include <vector>
 
+#include "buffer.h"
 #include "collectors/collector.h"
 #include "config/config.h"
 #include "metric.h"
@@ -19,10 +21,12 @@ class Scheduler {
   void Run();
 
  private:
-  void PrintDashboard(const std::vector<Metric>& metrics);
+  void PrintDashboard();
+  static std::string DescribeKey(const BufferKey& key);
 
   std::vector<collectors::Collector*> collectors_;
   const config::Config& config_;
+  MetricsBuffer buffer_;
 };
 
 }  // namespace agent
