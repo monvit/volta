@@ -37,6 +37,7 @@ struct Config {
   // TODO: move this initialization logic to the ConfigLoader's
   // LoadDefaultConfig method
   static constexpr int32_t kDefaultIntervalMs = 500;
+  static constexpr int32_t kDefaultTimeWindowMs = 2000;
   static constexpr char const* kDefaultServerAddress = "localhost";
   static constexpr uint16_t kDefaultServerPort = 50051;
   static inline cpu_set_t kDefaultAffinity = [] {
@@ -59,6 +60,8 @@ struct Config {
   std::string server_address = kDefaultServerAddress;
   uint16_t server_port = kDefaultServerPort;
   std::vector<MetricType> requestedMetrics;
+  std::chrono::milliseconds buffered_time_window =
+      std::chrono::milliseconds(kDefaultTimeWindowMs);
 };
 
 }  // namespace config

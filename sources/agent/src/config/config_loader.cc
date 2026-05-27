@@ -21,7 +21,8 @@ std::filesystem::path ConfigLoader::kConfigFile = "agent.conf";
 std::filesystem::path ConfigLoader::kUUIDFile = "agent.uuid";
 
 std::set<std::string_view, std::less<>> ConfigLoader::kValidTopLevelKeys = {
-    "core_affinity", "interval", "server_address", "server_port", "metrics"};
+    "core_affinity", "interval", "server_address",
+    "server_port",   "metrics",  "time_window"};
 
 Config ConfigLoader::LoadConfig() {
   Config config = LoadDefaultConfig();
@@ -107,6 +108,7 @@ void ConfigLoader::LoadConfigFile(Config& out_config) {
 
     LoadCoreAffinity(tbl, out_config);
     LoadInterval(tbl, out_config);
+    LoadTimeWindow(tbl, out_config);
     LoadServerAddress(tbl, out_config);
     LoadServerPort(tbl, out_config);
     LoadMetrics(tbl, out_config);
@@ -308,6 +310,27 @@ void ConfigLoader::LoadMetrics(toml::table& tbl, Config& out_config) {
     out_config.requestedMetrics = std::move(metrics);
     std::cout << "Requested metrics updated to "
               << out_config.requestedMetrics.size() << " entries" << std::endl;
+  }
+}
+
+void ConfigLoader::LoadTimeWindow(toml::table& tbl, Config& out_config) {
+  if (!tbl.contains("time_window")) {
+    return;
+  }
+
+  auto val = tbl["time_window"];
+
+  if (auto window = val.value<float>();
+      window &&
+      (*window * 1000) > (float)out_config.collection_interval.count()) {
+    out_config.buffered_time_window =
+        std::chrono::milliseconds((uint32_t)(*window * 1000));
+    std::cout << "Time window set to " << *window << std::endl;
+  } else {
+    std::cerr << "time_window has an incorrect type or value, use number "
+                 "larger than collection interval ("
+              << (float_t)out_config.collection_interval.count() / 1000.0
+              << "s)" << std::endl;
   }
 }
 

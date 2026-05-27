@@ -86,8 +86,9 @@ std::vector<Sample> SeriesBuffer::Snapshot() const {
   return result;
 }
 
-MetricsBuffer::MetricsBuffer(size_t capacity_per_series)
-    : capacity_per_series_(capacity_per_series) {}
+MetricsBuffer::MetricsBuffer(const config::Config& cfg)
+    : capacity_per_series_(cfg.buffered_time_window / cfg.collection_interval) {
+}
 
 void MetricsBuffer::SetCapacityPerSeries(size_t capacity) {
   capacity_per_series_ = capacity;

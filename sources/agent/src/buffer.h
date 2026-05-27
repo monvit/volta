@@ -9,6 +9,7 @@
 #include <utility>
 #include <vector>
 
+#include "config/config.h"
 #include "metric.h"
 
 namespace volta {
@@ -70,7 +71,7 @@ static_assert(std::is_standard_layout_v<BufferKey>);
 
 class MetricsBuffer {
  public:
-  explicit MetricsBuffer(size_t capacity_per_series = 0);
+  explicit MetricsBuffer(const config::Config& cfg);
 
   void SetCapacityPerSeries(size_t capacity);
   size_t CapacityPerSeries() const { return capacity_per_series_; }

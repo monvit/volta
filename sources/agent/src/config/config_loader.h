@@ -28,6 +28,7 @@ class ConfigLoader {
   static void LoadServerAddress(toml::table& tbl, Config& out_config);
   static void LoadServerPort(toml::table& tbl, Config& out_config);
   static void LoadMetrics(toml::table& tbl, Config& out_config);
+  static void LoadTimeWindow(toml::table& tbl, Config& out_config);
   static void CheckKeys(toml::table& tbl);
 
   static std::filesystem::path kConfigFile;

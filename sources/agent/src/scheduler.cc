@@ -10,7 +10,7 @@ namespace agent {
 
 Scheduler::Scheduler(const config::Config& config,
                      std::vector<collectors::Collector*>&& collectors)
-    : collectors_(std::move(collectors)), config_(config), buffer_(1) {}
+    : collectors_(std::move(collectors)), config_(config), buffer_(config) {}
 
 void Scheduler::Run() {
   for (auto collector : collectors_) {
@@ -60,8 +60,10 @@ void Scheduler::PrintDashboard() {
   std::cout << "    VOLTA AGENT v0.5 - ACTIVE MONITOR    \n";
   std::cout << "===============================================\n";
 
-  std::cout << std::left << std::setw(42) << "METRIC NAME"
-            << "    VALUE\n";
+  std::cout << std::left << std::setw(42) << "METRIC NAME" << std::setw(38)
+            << "DEVICE"
+            << "    " << std::fixed << "VALUE"
+            << "\n";
   std::cout << "-----------------------------------------------\n";
 
   auto latest = buffer_.LatestSamples();
@@ -81,6 +83,7 @@ void Scheduler::PrintDashboard() {
 
   std::cout << "-----------------------------------------------\n";
   std::cout << "Data points collected: " << latest.size() << "\n";
+  std::cout << "# of metrics buffered: " << buffer_.CapacityPerSeries() << "\n";
   std::cout << "Press Ctrl+C to exit."
             << "\n";
   std::cout.flush();
