@@ -84,18 +84,26 @@ message DeviceID {
   }
 }
 
-message MetricObservation {
+// Describes the metrics that are sent within a batch
+message BatchHeader {
   MetricType metric_type = 1;
-  DeviceID device_id = 2;
-  google.protobuf.Timestamp timestamp = 3;
-  double value = 4;
+  optional DeviceID device_id = 2;
 }
 
+// The server sends these back to acknowledge a batch.
+message BatchAck {
+  uint64 samples_received = 1;
+  optional string error = 2;
+}
+
+// Batch multiple metrics into one message to keep the header overhead low
+message MetricBatch {
+  BatchHeader header = 1;
+  repeated uint64 timestamps_ns = 2 [packed = true];
+  repeated double values = 3 [packed = true];
+}
+
+// Unary calls over persistent channel
 service VoltaCollector {
-  rpc CollectMetrics(stream MetricObservation) returns (CollectResponse);
-}
-
-message CollectResponse {
-  bool success = 1;
-  string message = 2;
+  rpc StreamMetrics(MetricBatch) returns (BatchAck);
 }
