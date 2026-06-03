@@ -1,16 +1,19 @@
 #ifndef VOLTA_AGENT_SRC_BUFFER_H_
 #define VOLTA_AGENT_SRC_BUFFER_H_
 
+#include <metric.h>
+
 #include <cstddef>
 #include <cstdint>
+#include <mutex>
 #include <optional>
+#include <shared_mutex>
 #include <type_traits>
 #include <unordered_map>
 #include <utility>
 #include <vector>
 
 #include "config/config.h"
-#include "metric.h"
 
 namespace volta {
 namespace agent {
@@ -43,6 +46,8 @@ struct BufferKey {
   bool operator==(const BufferKey&) const = default;
 };
 
+static_assert(std::is_standard_layout_v<BufferKey>);
+
 struct BufferKeyHash {
   size_t operator()(const BufferKey& key) const noexcept;
 };
@@ -51,42 +56,62 @@ class SeriesBuffer {
  public:
   explicit SeriesBuffer(size_t capacity = 0);
 
+  using Snapshot = struct {
+    std::vector<Sample> samples;
+    size_t end;
+  };
+
+  void Push(const Sample& sample);
+  std::optional<Sample> Latest() const;
+
+  // Snapshots all of the unsent data
+  Snapshot GetSnapshot() const;
+
+  // Marks all the samples from the snapshot as sent
+  void AckSnapshot(Snapshot snapshot_end);
+
   void SetCapacity(size_t capacity);
   size_t Capacity() const { return capacity_; }
   size_t Size() const { return samples_.size(); }
   bool Empty() const { return samples_.empty(); }
-
-  void Push(const Sample& sample);
-  std::optional<Sample> Latest() const;
-  std::vector<Sample> Snapshot() const;
+  size_t GetHead() const { return head_; }
+  size_t GetTail() const { return tail_; }
 
  private:
+  mutable std::mutex mutex_;
   size_t capacity_ = 0;
   std::vector<Sample> samples_;
   size_t head_ = 0;
+  size_t tail_ = 0;
   bool wrapped_ = false;
 };
-
-static_assert(std::is_standard_layout_v<BufferKey>);
 
 class MetricsBuffer {
  public:
   explicit MetricsBuffer(const config::Config& cfg);
 
-  void SetCapacityPerSeries(size_t capacity);
   size_t CapacityPerSeries() const { return capacity_per_series_; }
 
+  void AddMetrics(const std::vector<Metric>& metrics);
+  SeriesBuffer* GetBuffer(const BufferKey& key);
+  std::vector<BufferKey> GetAllKeys() const;
+  std::vector<std::pair<BufferKey, Sample>> LatestSamples() const;
+
+  static BufferKey MakeBufferKey(const Metric& metric);
+
+ private:
+  using SeriesMap = std::unordered_map<BufferKey, std::unique_ptr<SeriesBuffer>,
+                                       BufferKeyHash>;
+
+  void SetCapacityPerSeries(size_t capacity);
+  std::optional<Sample> Latest(const BufferKey& key) const;
   void AddSample(const BufferKey& key, const Sample& sample);
   void AddMetric(const Metric& metric);
 
-  std::optional<Sample> Latest(const BufferKey& key) const;
-  std::vector<std::pair<BufferKey, Sample>> LatestSamples() const;
-
- private:
-  static BufferKey MakeBufferKey(const Metric& metric);
-
+  mutable std::shared_mutex mutex_;
   size_t capacity_per_series_ = 0;
-  std::unordered_map<BufferKey, SeriesBuffer, BufferKeyHash> series_;
+  SeriesMap series_;
+  std::vector<BufferKey> keys_;
 };
 
 }  // namespace agent

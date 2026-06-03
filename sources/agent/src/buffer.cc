@@ -1,7 +1,7 @@
 #include "buffer.h"
 
 #include <cstring>
-#include <functional>
+#include <shared_mutex>
 #include <type_traits>
 #include <variant>
 
@@ -39,70 +39,83 @@ size_t BufferKeyHash::operator()(const BufferKey& key) const noexcept {
   return static_cast<size_t>(hash);
 }
 
-SeriesBuffer::SeriesBuffer(size_t capacity) { SetCapacity(capacity); }
+SeriesBuffer::SeriesBuffer(size_t capacity) : mutex_() {
+  SetCapacity(capacity);
+}
 
 void SeriesBuffer::SetCapacity(size_t capacity) {
   capacity_ = capacity;
   samples_.clear();
   samples_.reserve(capacity_);
+  samples_.resize(capacity_);
   head_ = 0;
   wrapped_ = false;
 }
 
 void SeriesBuffer::Push(const Sample& sample) {
+  std::lock_guard lock(mutex_);
   if (capacity_ == 0) return;
 
-  if (samples_.size() < capacity_) {
-    samples_.push_back(sample);
-    if (samples_.size() == capacity_) {
-      head_ = 0;
-      wrapped_ = true;
-    }
-    return;
-  }
+  if (head_ - tail_ >= capacity_) tail_++;  // drop oldest unsent
 
-  samples_[head_] = sample;
-  head_ = (head_ + 1) % capacity_;
-  wrapped_ = true;
+  samples_[head_ % capacity_] = sample;
+  head_++;
 }
 
 std::optional<Sample> SeriesBuffer::Latest() const {
+  std::lock_guard lock(mutex_);
+
   if (samples_.empty()) return std::nullopt;
-  if (!wrapped_) return samples_.back();
-  const size_t index = (head_ + capacity_ - 1) % capacity_;
-  return samples_[index];
+  return samples_[(head_ - 1) % capacity_];
 }
 
-std::vector<Sample> SeriesBuffer::Snapshot() const {
+SeriesBuffer::Snapshot SeriesBuffer::GetSnapshot() const {
+  std::lock_guard lock(mutex_);
+
   if (samples_.empty()) return {};
-  if (!wrapped_) return samples_;
 
   std::vector<Sample> result;
   result.reserve(samples_.size());
-  for (size_t i = 0; i < samples_.size(); ++i) {
-    const size_t index = (head_ + i) % capacity_;
-    result.push_back(samples_[index]);
+
+  for (size_t i = tail_; i < head_; ++i) {
+    result.push_back(samples_[i % capacity_]);
   }
-  return result;
+
+  return {result, head_};
+}
+
+void SeriesBuffer::AckSnapshot(SeriesBuffer::Snapshot snapshot) {
+  std::lock_guard lock(mutex_);
+
+  if (snapshot.end > tail_) tail_ = snapshot.end;
 }
 
 MetricsBuffer::MetricsBuffer(const config::Config& cfg)
-    : capacity_per_series_(cfg.buffered_time_window / cfg.collection_interval) {
+    : mutex_(),
+      capacity_per_series_(cfg.buffered_time_window / cfg.collection_interval) {
 }
 
 void MetricsBuffer::SetCapacityPerSeries(size_t capacity) {
+  std::lock_guard lock(mutex_);
   capacity_per_series_ = capacity;
   for (auto& [_, buffer] : series_) {
-    buffer.SetCapacity(capacity_per_series_);
+    buffer->SetCapacity(capacity_per_series_);
   }
 }
 
+SeriesBuffer* MetricsBuffer::GetBuffer(const BufferKey& key) {
+  std::shared_lock lock(mutex_);  // read-only, no insertion
+  auto it = series_.find(key);
+  return it != series_.end() ? &*it->second : nullptr;
+}
+
 void MetricsBuffer::AddSample(const BufferKey& key, const Sample& sample) {
-  auto& series = series_[key];
-  if (series.Capacity() != capacity_per_series_) {
-    series.SetCapacity(capacity_per_series_);
+  auto [it, inserted] = series_.emplace(key, nullptr);
+  if (inserted) {
+    it->second = std::make_unique<SeriesBuffer>(capacity_per_series_);
+    keys_.push_back(key);
   }
-  series.Push(sample);
+  it->second->Push(sample);
 }
 
 void MetricsBuffer::AddMetric(const Metric& metric) {
@@ -111,22 +124,36 @@ void MetricsBuffer::AddMetric(const Metric& metric) {
             Sample{.timestamp_ns = metric.timestamp, .value = metric.value});
 }
 
+void MetricsBuffer::AddMetrics(const std::vector<Metric>& metrics) {
+  std::lock_guard lock(mutex_);
+  for (auto metric : metrics) AddMetric(metric);
+}
+
 std::optional<Sample> MetricsBuffer::Latest(const BufferKey& key) const {
+  std::lock_guard lock(mutex_);
+
   auto it = series_.find(key);
   if (it == series_.end()) return std::nullopt;
-  return it->second.Latest();
+  return it->second->Latest();
 }
 
 std::vector<std::pair<BufferKey, Sample>> MetricsBuffer::LatestSamples() const {
+  std::lock_guard lock(mutex_);
+
   std::vector<std::pair<BufferKey, Sample>> result;
   result.reserve(series_.size());
   for (const auto& [key, series] : series_) {
-    auto latest = series.Latest();
+    auto latest = series->Latest();
     if (latest.has_value()) {
       result.emplace_back(key, *latest);
     }
   }
   return result;
+}
+
+std::vector<BufferKey> MetricsBuffer::GetAllKeys() const {
+  std::lock_guard lock(mutex_);
+  return keys_;
 }
 
 BufferKey MetricsBuffer::MakeBufferKey(const Metric& metric) {

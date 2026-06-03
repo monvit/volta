@@ -21,10 +21,10 @@ void Scheduler::Run() {
 
   while (true) {
     for (const auto& collector : collectors_) {
+      // TODO: make the metrics collect into a preallocated tray
+      //       instead of allocating new memory for each collection
       auto metrics = collector->Collect();
-      for (const auto& metric : metrics) {
-        buffer_.AddMetric(metric);
-      }
+      buffer_.AddMetrics(metrics);
     }
 
     PrintDashboard();
