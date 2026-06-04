@@ -84,7 +84,6 @@ class SeriesBuffer {
   std::vector<Sample> samples_;
   size_t head_ = 0;
   size_t tail_ = 0;
-  bool wrapped_ = false;
 };
 
 class MetricsBuffer {

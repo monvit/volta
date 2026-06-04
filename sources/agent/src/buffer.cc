@@ -44,12 +44,13 @@ SeriesBuffer::SeriesBuffer(size_t capacity) : mutex_() {
 }
 
 void SeriesBuffer::SetCapacity(size_t capacity) {
+  std::lock_guard lock(mutex_);
+
   capacity_ = capacity;
   samples_.clear();
   samples_.reserve(capacity_);
   samples_.resize(capacity_);
   head_ = 0;
-  wrapped_ = false;
 }
 
 void SeriesBuffer::Push(const Sample& sample) {
@@ -65,7 +66,7 @@ void SeriesBuffer::Push(const Sample& sample) {
 std::optional<Sample> SeriesBuffer::Latest() const {
   std::lock_guard lock(mutex_);
 
-  if (samples_.empty()) return std::nullopt;
+  if (head_ - tail_ == 0) return std::nullopt;
   return samples_[(head_ - 1) % capacity_];
 }
 
@@ -76,10 +77,8 @@ size_t SeriesBuffer::GetNextSnapshotSize() const {
 SeriesBuffer::Snapshot SeriesBuffer::GetSnapshot() const {
   std::shared_lock lock(mutex_);
 
-  if (samples_.empty()) return {};
-
   std::vector<Sample> result;
-  result.reserve(samples_.size());
+  result.reserve(head_ - tail_);
 
   for (size_t i = tail_; i < head_; ++i) {
     result.push_back(samples_[i % capacity_]);
@@ -131,7 +130,7 @@ void MetricsBuffer::AddMetric(const Metric& metric) {
 
 void MetricsBuffer::AddMetrics(const std::vector<Metric>& metrics) {
   std::lock_guard lock(mutex_);
-  for (auto metric : metrics) AddMetric(metric);
+  for (const auto& metric : metrics) AddMetric(metric);
 }
 
 std::optional<Sample> MetricsBuffer::Latest(const BufferKey& key) const {
