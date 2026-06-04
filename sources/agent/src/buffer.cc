@@ -69,8 +69,12 @@ std::optional<Sample> SeriesBuffer::Latest() const {
   return samples_[(head_ - 1) % capacity_];
 }
 
+size_t SeriesBuffer::GetNextSnapshotSize() const {
+  std::shared_lock lock(mutex_);
+  return head_ - tail_;
+}
 SeriesBuffer::Snapshot SeriesBuffer::GetSnapshot() const {
-  std::lock_guard lock(mutex_);
+  std::shared_lock lock(mutex_);
 
   if (samples_.empty()) return {};
 
@@ -84,7 +88,7 @@ SeriesBuffer::Snapshot SeriesBuffer::GetSnapshot() const {
   return {result, head_};
 }
 
-void SeriesBuffer::AckSnapshot(SeriesBuffer::Snapshot snapshot) {
+void SeriesBuffer::AckSnapshot(const SeriesBuffer::Snapshot& snapshot) {
   std::lock_guard lock(mutex_);
 
   if (snapshot.end > tail_) tail_ = snapshot.end;
@@ -103,10 +107,11 @@ void MetricsBuffer::SetCapacityPerSeries(size_t capacity) {
   }
 }
 
-SeriesBuffer* MetricsBuffer::GetBuffer(const BufferKey& key) {
-  std::shared_lock lock(mutex_);  // read-only, no insertion
+std::shared_ptr<SeriesBuffer> MetricsBuffer::GetBuffer(
+    const BufferKey& key) const {
+  std::shared_lock lock(mutex_);
   auto it = series_.find(key);
-  return it != series_.end() ? &*it->second : nullptr;
+  return it != series_.end() ? it->second : nullptr;
 }
 
 void MetricsBuffer::AddSample(const BufferKey& key, const Sample& sample) {

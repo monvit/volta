@@ -64,11 +64,12 @@ class SeriesBuffer {
   void Push(const Sample& sample);
   std::optional<Sample> Latest() const;
 
+  size_t GetNextSnapshotSize() const;
   // Snapshots all of the unsent data
   Snapshot GetSnapshot() const;
 
   // Marks all the samples from the snapshot as sent
-  void AckSnapshot(Snapshot snapshot_end);
+  void AckSnapshot(const Snapshot& snapshot_end);
 
   void SetCapacity(size_t capacity);
   size_t Capacity() const { return capacity_; }
@@ -78,7 +79,7 @@ class SeriesBuffer {
   size_t GetTail() const { return tail_; }
 
  private:
-  mutable std::mutex mutex_;
+  mutable std::shared_mutex mutex_;
   size_t capacity_ = 0;
   std::vector<Sample> samples_;
   size_t head_ = 0;
@@ -93,14 +94,14 @@ class MetricsBuffer {
   size_t CapacityPerSeries() const { return capacity_per_series_; }
 
   void AddMetrics(const std::vector<Metric>& metrics);
-  SeriesBuffer* GetBuffer(const BufferKey& key);
+  std::shared_ptr<SeriesBuffer> GetBuffer(const BufferKey& key) const;
   std::vector<BufferKey> GetAllKeys() const;
   std::vector<std::pair<BufferKey, Sample>> LatestSamples() const;
 
   static BufferKey MakeBufferKey(const Metric& metric);
 
  private:
-  using SeriesMap = std::unordered_map<BufferKey, std::unique_ptr<SeriesBuffer>,
+  using SeriesMap = std::unordered_map<BufferKey, std::shared_ptr<SeriesBuffer>,
                                        BufferKeyHash>;
 
   void SetCapacityPerSeries(size_t capacity);
