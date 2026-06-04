@@ -77,11 +77,21 @@ target_link_libraries(volta_agent PRIVATE
     tomlplusplus::tomlplusplus
 )
 # --- NVML ---
-find_package(CUDAToolkit QUIET)
+find_path(NVML_INCLUDE_DIR nvml.h
+    PATHS
+        ${CMAKE_SOURCE_DIR}/libs/include/nvidia
+        /usr/include
+        /usr/local/cuda/include
+)
 
-if(CUDAToolkit_FOUND)
-    message(STATUS "Found NVML via CUDAToolkit: ${CUDAToolkit_LIBRARY_DIR}")
-    target_link_libraries(volta_agent PRIVATE CUDA::nvml)
+find_library(NVML_LIBRARY NAMES nvidia-ml nvml
+    PATHS /usr/lib /usr/lib64 /usr/local/lib
+)
+
+if(NVML_INCLUDE_DIR AND NVML_LIBRARY)
+    message(STATUS "Found NVML: ${NVML_LIBRARY}")
+    target_include_directories(volta_agent PRIVATE ${NVML_INCLUDE_DIR})
+    target_link_libraries(volta_agent PRIVATE ${NVML_LIBRARY})
 else()
     message(STATUS "NVML not found - using stub")
     add_library(nvml_stub STATIC ${CMAKE_SOURCE_DIR}/libs/stubs/nvml_stub.cc)
