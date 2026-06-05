@@ -16,16 +16,18 @@ namespace agent {
 namespace client {
 
 class Client : public IMessageHandler {
-public:
+ public:
   Client(std::shared_ptr<grpc::Channel> channel, config::Config& config);
   ~Client() override = default;
 
   void Connect();
-  void OnMessage(const ::volta::ControlMessage& msg) override; // IMessageHandler
+  void OnMessage(
+      const ::volta::ControlMessage& msg) override;  // IMessageHandler
 
-  static std::shared_ptr<grpc::Channel> CreateChannel(const std::string& address);
+  static std::shared_ptr<grpc::Channel> CreateChannel(
+      const std::string& address);
 
-private:
+ private:
   void SendData();
   void StreamData();
 
@@ -42,8 +44,8 @@ private:
   static std::filesystem::path kUUIDFile;
 };
 
-} // namespace client
-} // namespace agent
-} // namespace volta
+}  // namespace client
+}  // namespace agent
+}  // namespace volta
 
-#endif // VOLTA_AGENT_CLIENT_VOLTA_COLLECTOR_CLIENT_H_
+#endif  // VOLTA_AGENT_CLIENT_VOLTA_COLLECTOR_CLIENT_H_

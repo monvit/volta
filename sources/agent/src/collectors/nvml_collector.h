@@ -3,21 +3,32 @@
 
 #include <nvml.h>
 
+#include <vector>
+
 #include "collectors/collector.h"
 
 namespace volta {
 namespace agent {
 namespace collectors {
 
-class NvmlCollector : public Collector {
+class NvmlCollector : public RegisteredCollector<NvmlCollector> {
  public:
   NvmlCollector();
   ~NvmlCollector() override;
 
+  NvmlCollector(NvmlCollector&&) = default;
+  NvmlCollector& operator=(NvmlCollector&&) = default;
+
   bool Init() override;
   std::vector<Metric> Collect() override;
+  bool IsSupported() override;
+  std::vector<MetricType> Satisfiable() override;
+  void SetRequestedMetrics(const std::vector<MetricType>& metrics) override;
 
  private:
+  std::vector<MetricType> requested_metrics_;
+  std::optional<GpuID> gpu_id_;
+
   nvmlDevice_t device_handle_;
   bool initialized_ = false;
 };

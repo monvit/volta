@@ -1,13 +1,30 @@
 #include "collectors/proc_stat_collector.h"
 
+#include <algorithm>
 #include <chrono>
+#include <filesystem>
 #include <sstream>
 
 namespace volta {
 namespace agent {
 namespace collectors {
 
+bool ProcStatCollector::Init() { return true; }
+
+void ProcStatCollector::SetRequestedMetrics(
+    const std::vector<MetricType>& metrics) {
+  requested_metrics_ = metrics;
+}
+
 std::vector<Metric> ProcStatCollector::Collect() {
+  if (requested_metrics_.empty()) return {};
+
+  if (std::find(requested_metrics_.begin(), requested_metrics_.end(),
+                MetricType::METRIC_TYPE_CPU_UTILIZATION) ==
+      requested_metrics_.end()) {
+    return {};
+  }
+
   uint64_t current_total = 0;
   uint64_t current_idle = 0;
 
@@ -17,20 +34,30 @@ std::vector<Metric> ProcStatCollector::Collect() {
   uint64_t diff_idle = current_idle - prev_idle_;
 
   double usage_percent = 0.0;
-  if (diff_total > 0)
+  if (diff_total > 0) {
     usage_percent = (double)(diff_total - diff_idle) / diff_total * 100.0;
+  }
 
   prev_total_ = current_total;
   prev_idle_ = current_idle;
 
   Metric m;
-  m.name = "cpu_usage_total_percent";
+  m.type = MetricType::METRIC_TYPE_CPU_UTILIZATION;
+  m.devId = std::nullopt;
   m.value = usage_percent;
   m.timestamp = std::chrono::duration_cast<std::chrono::milliseconds>(
                     std::chrono::system_clock::now().time_since_epoch())
                     .count();
 
   return {m};
+}
+
+bool ProcStatCollector::IsSupported() {
+  return std::filesystem::exists("/proc/stat");
+}
+
+std::vector<MetricType> ProcStatCollector::Satisfiable() {
+  return {MetricType::METRIC_TYPE_CPU_UTILIZATION};
 }
 
 void ProcStatCollector::ReadCpuStats(uint64_t& total, uint64_t& idle) {

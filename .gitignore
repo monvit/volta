@@ -4,12 +4,12 @@
 sources/**/logs
 
 # --- Agent ---
-build/
 .cache/
 compile_commands.json
 sources/agent/agent.conf
 .clang-format
 *.uuid
+out/
 
 # --- Server ---
 sources/server/pb/

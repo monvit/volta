@@ -10,6 +10,7 @@
 #include "collectors/nvml_collector.h"
 #include "collectors/proc_stat_collector.h"
 #include "collectors/ram_collector.h"
+#include "collectors/rapl_collector.h"
 #include "config/config.h"
 #include "config/config_loader.h"
 #include "platform/platform_detector.h"
@@ -21,18 +22,14 @@ int main() {
   try {
     auto config = config::ConfigLoader::LoadConfig();
 
-    auto channel = client::Client::CreateChannel("localhost:5000");
-    client::Client client(channel, config);
+    // platform::PlatformDetector detector;
+    // auto hw = detector.Detect();
+    // detector.PrintDetectedInfo(hw);
 
-    std::thread t([&client]() { client.Connect(); });
+    auto active_collectors = collectors::CollectorRegistry::Instance().Resolve(
+        config.requestedMetrics);
 
-    t.join();
-
-    //   platform::PlatformDetector detector;
-    //   auto hw = detector.Detect();
-    //   detector.PrintDetectedInfo(hw);
-
-    //   std::vector<std::unique_ptr<collectors::Collector>> active_collectors;
+    std::cin.get();
 
     //   active_collectors.push_back(std::make_unique<collectors::ProcStatCollector>());
 
