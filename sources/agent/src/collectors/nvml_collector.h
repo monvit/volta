@@ -22,11 +22,12 @@ class NvmlCollector : public RegisteredCollector<NvmlCollector> {
   bool Init() override;
   std::vector<Metric> Collect() override;
   bool IsSupported() override;
-  std::vector<v1::MetricType> Satisfiable() override;
-  void SetRequestedMetrics(const std::vector<v1::MetricType>& metrics) override;
+  std::vector<MetricType> Satisfiable() override;
+  void SetRequestedMetrics(const std::vector<MetricType>& metrics) override;
 
  private:
-  std::vector<v1::MetricType> requested_metrics_;
+  std::vector<MetricType> requested_metrics_;
+  std::optional<GpuID> gpu_id_;
 
   nvmlDevice_t device_handle_;
   bool initialized_ = false;

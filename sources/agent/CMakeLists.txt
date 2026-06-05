@@ -62,7 +62,7 @@ if(CMAKE_BUILD_TYPE STREQUAL "Debug")
     target_compile_definitions(volta_agent PRIVATE DEBUG)
 endif()
 
-file(GLOB_RECURSE AGENT_SOURCES "src/*.cc")
+file(GLOB_RECURSE AGENT_SOURCES CONFIGURE_DEPENDS "src/*.cc")
 target_sources(volta_agent PRIVATE ${AGENT_SOURCES})
 
 target_include_directories(volta_agent PRIVATE
@@ -76,7 +76,6 @@ target_link_libraries(volta_agent PRIVATE
     fmt::fmt
     tomlplusplus::tomlplusplus
 )
-
 # --- NVML ---
 find_path(NVML_INCLUDE_DIR nvml.h
     PATHS

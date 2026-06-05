@@ -2,7 +2,7 @@ syntax = "proto3";
 
 import "google/protobuf/timestamp.proto";
 
-package volta.v1;
+package volta;
 
 
 enum MetricType {
@@ -53,19 +53,57 @@ enum MetricType {
   METRIC_TYPE_NET_PACKETS_SENT = 503;
 }
 
-service VoltaCollector {
-  rpc CollectMetrics(stream MetricBatch) returns (CollectResponse);
+
+message GpuID {
+  uint32 pci_domain = 1;
+  uint32 pci_bus = 2;
+  uint32 pci_device = 3;
+  uint32 pci_function = 4;
 }
 
+message CpuID {
+  uint32 socket_index = 1;
+  uint32 core_index = 2;
+}
+
+message NetInterfaceID {
+  uint32 ifindex = 1;
+}
+
+message DiskID {
+  uint32 major = 1;
+  uint32 minor = 2;
+}
+
+message DeviceID {
+  oneof device {
+    GpuID gpu = 1;
+    CpuID cpu = 2;
+    NetInterfaceID network = 3;
+    DiskID disk = 4;
+  }
+}
+
+// Describes the metrics that are sent within a batch
+message BatchHeader {
+  MetricType metric_type = 1;
+  optional DeviceID device_id = 2;
+}
+
+// The server sends these back to acknowledge a batch.
+message BatchAck {
+  uint64 samples_received = 1;
+  optional string error = 2;
+}
+
+// Batch multiple metrics into one message to keep the header overhead low
 message MetricBatch {
-  google.protobuf.Timestamp timestamp = 1;
-
-  string hostname = 2;
-
-  map<string, double> metrics = 3;
+  BatchHeader header = 1;
+  repeated uint64 timestamps_ns = 2 [packed = true];
+  repeated double values = 3 [packed = true];
 }
 
-message CollectResponse {
-  bool success = 1;
-  string message = 2;
+// Unary calls over persistent channel
+service VoltaCollector {
+  rpc StreamMetrics(MetricBatch) returns (BatchAck);
 }

@@ -54,14 +54,14 @@ bool RaplCollector::IsSupported() {
 }
 
 void RaplCollector::SetRequestedMetrics(
-    const std::vector<v1::MetricType>& metrics) {
+    const std::vector<MetricType>& metrics) {
   requested_metrics_ = metrics;
 }
 
 std::vector<Metric> RaplCollector::Collect() {
   if (!initialized_ || requested_metrics_.empty()) return {};
   if (std::find(requested_metrics_.begin(), requested_metrics_.end(),
-                v1::MetricType::METRIC_TYPE_CPU_POWER_PACKAGE) ==
+                MetricType::METRIC_TYPE_CPU_POWER_PACKAGE) ==
       requested_metrics_.end()) {
     return {};
   }
@@ -75,16 +75,19 @@ std::vector<Metric> RaplCollector::Collect() {
 
   double value = energy_units_ * readout;
   Metric m;
-  m.type = v1::MetricType::METRIC_TYPE_CPU_POWER_PACKAGE;
-  m.devId = {};
+  m.type = MetricType::METRIC_TYPE_CPU_POWER_PACKAGE;
+  CpuID cpu_id;
+  cpu_id.set_socket_index(0);
+  cpu_id.set_core_index(0);
+  m.devId = DeviceId{std::move(cpu_id)};
   m.value = value - last_value;
   m.timestamp = std::chrono::system_clock::now().time_since_epoch().count();
   last_value = value;
   return {m};
 }
 
-std::vector<v1::MetricType> RaplCollector::Satisfiable() {
-  return {v1::MetricType::METRIC_TYPE_CPU_POWER_PACKAGE};
+std::vector<MetricType> RaplCollector::Satisfiable() {
+  return {MetricType::METRIC_TYPE_CPU_POWER_PACKAGE};
 }
 
 uint64_t RaplCollector::ReadMSR(uint8_t core, uint32_t offset) {

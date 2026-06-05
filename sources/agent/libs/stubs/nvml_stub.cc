@@ -78,4 +78,9 @@ nvmlReturn_t nvmlDeviceGetName(nvmlDevice_t device, char* name, unsigned int len
     return NVML_SUCCESS;
 }
 
+nvmlReturn_t nvmlDeviceGetPciInfo_v3(nvmlDevice_t device, nvmlPciInfo_t *pci) {
+    *pci = {0};
+    return nvmlReturn_t::NVML_SUCCESS;
+}
+
 } // extern "C"
