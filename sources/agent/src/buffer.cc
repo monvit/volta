@@ -66,7 +66,7 @@ void SeriesBuffer::Push(const Sample& sample) {
 std::optional<Sample> SeriesBuffer::Latest() const {
   std::lock_guard lock(mutex_);
 
-  if (head_ - tail_ == 0) return std::nullopt;
+  if (head_ == 0) return std::nullopt;
   return samples_[(head_ - 1) % capacity_];
 }
 

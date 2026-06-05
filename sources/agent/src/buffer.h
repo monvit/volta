@@ -5,7 +5,6 @@
 
 #include <cstddef>
 #include <cstdint>
-#include <mutex>
 #include <optional>
 #include <shared_mutex>
 #include <type_traits>
@@ -64,8 +63,10 @@ class SeriesBuffer {
   void Push(const Sample& sample);
   std::optional<Sample> Latest() const;
 
+  // Returns the number of unsent samples
   size_t GetNextSnapshotSize() const;
-  // Snapshots all of the unsent data
+
+  // Snapshots all of the unsent samples
   Snapshot GetSnapshot() const;
 
   // Marks all the samples from the snapshot as sent
