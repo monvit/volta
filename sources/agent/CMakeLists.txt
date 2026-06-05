@@ -11,8 +11,8 @@ if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU" AND CMAKE_CXX_COMPILER_VERSION VERSION_L
 endif()
 
 # --- Dependencies ---
-find_package(gRPC CONFIG REQUIRED)
 find_package(protobuf CONFIG REQUIRED)
+find_package(gRPC CONFIG REQUIRED)
 find_package(fmt CONFIG REQUIRED)
 find_package(tomlplusplus CONFIG REQUIRED)
 find_package(Threads REQUIRED)
@@ -65,7 +65,7 @@ endforeach()
 
 add_library(volta_proto STATIC ${PROTO_SRCS} ${PROTO_HDRS})
 
-target_include_directories(volta_proto PUBLIC ${GENERATED_DIR})
+target_include_directories(volta_proto PUBLIC ${CMAKE_CURRENT_BINARY_DIR})
 
 target_link_libraries(volta_proto PUBLIC
     protobuf::libprotobuf

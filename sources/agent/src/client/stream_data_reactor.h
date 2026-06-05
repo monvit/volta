@@ -5,55 +5,46 @@
 #include <random>
 #include <thread>
 
-#include "iwriter.h"
+#include "buffer.h"
+#include "ireaderwriter.h"
 #include "volta.grpc.pb.h"
 
 namespace volta {
 namespace agent {
 namespace client {
 
-namespace {
-::volta::Metric CreateRandomMetric() {
-  static std::mt19937 rng{std::random_device{}()};
-  static std::uniform_real_distribution<double> val_dist(0.0, 100.0);
-  static std::uniform_int_distribution<int> name_dist(0, 4);
-  static const std::array<std::string, 5> names = {
-      "cpu_usage", "mem_usage", "disk_io", "net_rx", "net_tx"};
-
-  ::volta::Metric metric;
-  metric.set_name(names[name_dist(rng)]);
-  metric.set_value(val_dist(rng));
-
-  std::this_thread::sleep_for(std::chrono::seconds(4));
-
-  return metric;
-}
-}  // namespace
-
-class StreamDataReactor : public grpc::ClientWriteReactor<::volta::Metric>,
-                          public IWriter<::volta::Metric> {
+class StreamMetricsReactor
+    : public grpc::ClientBidiReactor<::volta::MetricBatch, ::volta::BatchAck>,
+      public IReaderWriter<uint64_t, ::volta::MetricBatch, ::volta::BatchAck> {
  public:
   using OnDoneCallback = std::function<void(const grpc::Status&)>;
 
-  StreamDataReactor(::volta::VoltaCollector::Stub* stub, const std::string& id,
-                    OnDoneCallback on_done);
-  ~StreamDataReactor() override = default;
+  StreamMetricsReactor(::volta::VoltaCollector::Stub* stub,
+                       const std::string& id,
+                       std::shared_ptr<::volta::agent::MetricsBuffer> buffer,
+                       OnDoneCallback on_done);
+  ~StreamMetricsReactor() override = default;
 
-  // ClientWriteReactor
+  // ClientBidiReactor
+  void OnReadDone(bool ok) override;
   void OnWriteDone(bool ok) override;
   void OnDone(const grpc::Status& status) override;
 
   // IWriter
-  void EnqueueWrite(::volta::Metric msg) override;
+  void EnqueueWrite(::volta::MetricBatch msg) override;
 
-  ::volta::Metric CreateMetric(const std::string& name, double value);
+  // IReader
+  void BindMessage(const uint64_t& key, ::volta::MetricBatch msg) override;
+  void UnbindMessage(const uint64_t& key) override;
 
  private:
   void Write() override;
+  void EnqueueMetrics();
 
   OnDoneCallback on_done_;
   grpc::ClientContext context_;
   std::mutex mu_;
+  std::shared_ptr<::volta::agent::MetricsBuffer> buffer_;
 };
 
 }  // namespace client

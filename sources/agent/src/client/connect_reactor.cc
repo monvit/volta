@@ -15,7 +15,6 @@ ConnectReactor::ConnectReactor(IMessageHandler* handler, const std::string& id,
   stub->async()->Connect(&context_, this);
 
   EnqueueWrite(CreateMessage(::volta::MessageType::MESSAGE_ID));
-  EnqueueWrite(CreateMessage(::volta::MessageType::MESSAGE_PING));
 
   StartRead(&res_);
   StartCall();

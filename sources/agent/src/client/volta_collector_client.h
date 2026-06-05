@@ -13,11 +13,15 @@
 
 namespace volta {
 namespace agent {
+
+class MetricsBuffer;
+
 namespace client {
 
 class Client : public IMessageHandler {
  public:
-  Client(std::shared_ptr<grpc::Channel> channel, config::Config& config);
+  Client(std::shared_ptr<grpc::Channel> channel, config::Config& config,
+         std::shared_ptr<::volta::agent::MetricsBuffer> buffer);
   ~Client() override = default;
 
   void Connect();
@@ -36,10 +40,11 @@ class Client : public IMessageHandler {
 
   std::string id_ = "";
   config::Config& config_;
+  std::shared_ptr<::volta::agent::MetricsBuffer> buffer_;
 
   std::unique_ptr<::volta::VoltaCollector::Stub> stub_;
   std::unique_ptr<ConnectReactor> connect_reactor_;
-  std::unique_ptr<StreamDataReactor> stream_data_reactor_;
+  std::unique_ptr<StreamMetricsReactor> stream_data_reactor_;
 
   static std::filesystem::path kUUIDFile;
 };

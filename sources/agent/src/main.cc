@@ -22,30 +22,28 @@ int main() {
   try {
     auto config = config::ConfigLoader::LoadConfig();
 
-    // platform::PlatformDetector detector;
-    // auto hw = detector.Detect();
-    // detector.PrintDetectedInfo(hw);
+    platform::PlatformDetector detector;
+    auto hw = detector.Detect();
+    detector.PrintDetectedInfo(hw);
 
     auto active_collectors = collectors::CollectorRegistry::Instance().Resolve(
         config.requestedMetrics);
 
     std::cin.get();
 
-    //   active_collectors.push_back(std::make_unique<collectors::ProcStatCollector>());
+    std::shared_ptr<MetricsBuffer> buffer =
+        std::make_shared<MetricsBuffer>(config);
+    Scheduler scheduler(config, std::move(active_collectors), buffer);
 
-    //   active_collectors.push_back(std::make_unique<collectors::RamCollector>());
+    std::jthread grpc_thread([&scheduler, &config, &buffer]() {
+      client::Client grpc_client(
+          client::Client::CreateChannel(config.server_address + ":" +
+                                        std::to_string(config.server_port)),
+          config, buffer);
+      grpc_client.Connect();
+    });
 
-    //   for (const auto& gpu : hw.gpus) {
-    //     if (gpu.vendor == platform::GpuVendor::NVIDIA) {
-    //       auto nvml = std::make_unique<collectors::NvmlCollector>();
-    //       if (nvml->Init()) {
-    //         active_collectors.push_back(std::move(nvml));
-    //       }
-    //     }
-    //   }
-
-    //   Scheduler scheduler(config, std::move(active_collectors));
-    //   scheduler.Run();
+    scheduler.Run();
 
   } catch (const std::exception& e) {
     std::cerr << "CRITICAL ERROR: " << e.what() << std::endl;

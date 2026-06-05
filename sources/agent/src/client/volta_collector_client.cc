@@ -4,14 +4,19 @@
 
 #include <fstream>
 
+#include "buffer.h"
+
 namespace volta {
 namespace agent {
 namespace client {
 
 std::filesystem::path Client::kUUIDFile = "agent.uuid";
 
-Client::Client(std::shared_ptr<grpc::Channel> channel, config::Config& config)
-    : stub_(::volta::VoltaCollector::NewStub(channel)), config_(config) {}
+Client::Client(std::shared_ptr<grpc::Channel> channel, config::Config& config,
+               std::shared_ptr<::volta::agent::MetricsBuffer> buffer)
+    : stub_(::volta::VoltaCollector::NewStub(channel)),
+      config_(config),
+      buffer_(buffer) {}
 
 // TODO: consider making this more configurable, e.g. support TLS, custom
 // options, etc.
@@ -73,6 +78,7 @@ void Client::Connect() {
 
 void Client::OnMessage(const ::volta::ControlMessage& msg) {
   switch (msg.type()) {
+    // TODO: move pinging to grpc server itself
     case ::volta::MessageType::MESSAGE_PING: {
       // TODO: timeout if pong not sent within certain time?
       connect_reactor_->EnqueueWrite(
@@ -123,8 +129,15 @@ void Client::SendData() {
 }
 
 void Client::StreamData() {
-  stream_data_reactor_ = std::make_unique<StreamDataReactor>(
-      stub_.get(), id_, [this](const grpc::Status& status) {
+  if (buffer_ == nullptr) {
+    std::cerr << "Cannot stream data: buffer is null" << std::endl;
+    connect_reactor_->EnqueueWrite(connect_reactor_->CreateMessage(
+        ::volta::MessageType::MESSAGE_ERROR, "Metrics buffer is null"));
+    return;
+  }
+
+  stream_data_reactor_ = std::make_unique<StreamMetricsReactor>(
+      stub_.get(), id_, buffer_, [this](const grpc::Status& status) {
         if (!status.ok()) {
           std::cerr << "StreamData RPC failed: " << status.error_message()
                     << std::endl;
