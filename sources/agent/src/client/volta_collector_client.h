@@ -8,7 +8,7 @@
 #include "config/config.h"
 #include "connect_reactor.h"
 #include "imessage_handler.h"
-#include "stream_data_reactor.h"
+#include "stream_metrics_reactor.h"
 #include "volta.grpc.pb.h"
 
 namespace volta {

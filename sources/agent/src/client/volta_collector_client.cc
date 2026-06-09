@@ -77,6 +77,9 @@ void Client::Connect() {
 }
 
 void Client::OnMessage(const ::volta::ControlMessage& msg) {
+  std::cout << "Received message from server: " << msg.DebugString()
+            << std::endl;
+
   switch (msg.type()) {
     // TODO: move pinging to grpc server itself
     case ::volta::MessageType::MESSAGE_PING: {

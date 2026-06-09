@@ -5,7 +5,7 @@ import (
 	"sync"
 
 	"github.com/gorilla/websocket"
-	eventbus "github.com/monvit/volta/sources/server/internal/eventBus"
+	eventbus "github.com/monvit/volta/server/internal/eventBus"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -22,6 +22,7 @@ type WSHub struct {
 	register chan *WSClient
 	remove   chan *WSClient
 	clients  map[*WSClient]struct{}
+	shutdown chan struct{}
 	mu       sync.Mutex
 }
 
@@ -35,6 +36,10 @@ func New(bus *eventbus.EventBus) *WSHub {
 				return true
 			},
 		},
+		register: make(chan *WSClient, 16),
+		remove:   make(chan *WSClient, 16),
+		clients:  make(map[*WSClient]struct{}),
+		shutdown: make(chan struct{}),
 	}
 }
 
@@ -52,14 +57,26 @@ func (h *WSHub) Run() {
 			h.mu.Lock()
 			delete(h.clients, c)
 			h.mu.Unlock()
+		case <-h.shutdown:
+			h.mu.Lock()
+			for c := range h.clients {
+				h.bus.Unsubscribe(c.sub)
+				c.conn.Close()
+				delete(h.clients, c)
+			}
+			h.mu.Unlock()
+			return
 		}
 	}
 }
 
+func (h *WSHub) Close() {
+	close(h.shutdown)
+}
+
 func (h *WSHub) pumpToClient(c *WSClient) {
 	defer func() { h.remove <- c }()
-	for range c.sub.Ch() {
-		batch := <-c.sub.Ch()
+	for batch := range c.sub.Ch() {
 		data, _ := proto.Marshal(batch)
 		c.conn.WriteMessage(websocket.BinaryMessage, data)
 	}

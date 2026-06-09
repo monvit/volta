@@ -4,7 +4,7 @@ package volta;
 
 import "google/protobuf/timestamp.proto";
 
-option go_package = "github.com/monvit/volta/sources/server/pb/types;types";
+option go_package = "github.com/monvit/volta/server/pb/types;types";
 
 message ListAgentsResponse {
   repeated Agent agents = 1;

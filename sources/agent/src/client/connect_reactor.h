@@ -20,7 +20,11 @@ class ConnectReactor : public grpc::ClientBidiReactor<::volta::ControlMessage,
  public:
   explicit ConnectReactor(IMessageHandler* handler, const std::string& id,
                           ::volta::VoltaCollector::Stub* stub);
-  ~ConnectReactor() = default;
+  ~ConnectReactor() override {
+    std::cout << "ConnectReactor destroyed for agent "
+              << context_.GetServerInitialMetadata().find("agent-id")->second
+              << std::endl;
+  }
 
   // ClientBidiReactor
   void OnWriteDone(bool ok) override;

@@ -1,4 +1,4 @@
-#include "stream_data_reactor.h"
+#include "stream_metrics_reactor.h"
 
 namespace volta {
 namespace agent {
@@ -9,9 +9,24 @@ StreamMetricsReactor::StreamMetricsReactor(
     std::shared_ptr<::volta::agent::MetricsBuffer> buffer,
     OnDoneCallback on_done)
     : on_done_(std::move(on_done)), buffer_(buffer) {
+  std::cout << "Starting StreamMetricsReactor for agent " << id << std::endl;
   context_.AddMetadata("agent-id", id);
   stub->async()->StreamMetrics(&context_, this);
-  EnqueueMetrics();
+
+  StartRead(&msg_);
+
+  poll_thread_ = std::jthread([this](std::stop_token st) {
+    while (!st.stop_requested()) {
+      if (st.stop_requested()) break;
+
+      EnqueueMetrics();
+      Write();
+
+      // TODO: better handling of polling interval, maybe dynamic based on how
+      // fast metrics are produced and acked?
+      std::this_thread::sleep_for(std::chrono::seconds(3));
+    }
+  });
 
   StartCall();
 }
@@ -22,29 +37,20 @@ void StreamMetricsReactor::OnReadDone(bool ok) {
     return;
   }
 
-  if (msg == nullptr) {
-    std::cerr << "Received null message from server" << std::endl;
-    Write();
-    return;
-  }
-
-  if (GetMessage(msg->batch_id()) != nullptr) {
-    std::cout << "Received ack for batch_id " << msg->batch_id()
-              << ", removing from readermap" << std::endl;
-    UnbindMessage(msg->batch_id());
+  if (GetMessage(msg_.batch_id()) != nullptr) {
+    // std::cout << "Received ack for batch_id " << msg_.batch_id() << ",
+    // removing from readermap" << std::endl;
+    UnbindMessage(msg_.batch_id());
   } else {
-    std::cout << "Received ack for unknown batch_id " << msg->batch_id()
+    std::cout << "Received ack for unknown batch_id " << msg_.batch_id()
               << std::endl;
   }
 
-  std::cout << "Samples_received: " << msg->samples_received() << std::endl;
-
-  if (msg->has_error()) {
-    std::cerr << "Error: " << *msg->mutable_error() << std::endl;
+  if (msg_.has_error()) {
+    std::cerr << "Error: " << *msg_.mutable_error() << std::endl;
   }
 
-  EnqueueMetrics();
-  Write();
+  StartRead(&msg_);
 }
 
 void StreamMetricsReactor::OnWriteDone(bool ok) {
@@ -60,11 +66,12 @@ void StreamMetricsReactor::OnWriteDone(bool ok) {
     writing_ = false;
   }
 
-  std::cout << "[" << std::chrono::system_clock::now() << "]"
-            << " Finished writing metric to server, queue size: "
-            << writerqu_.size() << std::endl;
+  // std::cout << "[" << std::chrono::system_clock::now() << "]"
+  //           << " Finished writing metric to server, queue size: " <<
+  //           writerqu_.size() << std::endl;
 
-  StartRead(msg);
+  EnqueueMetrics();
+  Write();
 }
 
 void StreamMetricsReactor::OnDone(const grpc::Status& status) {
@@ -94,8 +101,8 @@ void StreamMetricsReactor::UnbindMessage(const uint64_t& key) {
 }
 
 void StreamMetricsReactor::Write() {
+  std::lock_guard<std::mutex> l(mu_);
   if (writing_ || writerqu_.empty()) {
-    StartRead(msg);
     return;
   }
 
@@ -127,25 +134,27 @@ void StreamMetricsReactor::EnqueueMetrics() {
 
     ::volta::DeviceID* device_id = header->mutable_device_id();
 
-    if (key.pci_domain + key.pci_bus + key.pci_device + key.pci_function > 0) {
+    if (key.metric_type >= 100 && key.metric_type < 200) {
+      device_id->mutable_cpu()->set_socket_index(key.socket_index);
+      device_id->mutable_cpu()->set_core_index(key.core_index);
+    } else if (key.metric_type >= 200 && key.metric_type < 300) {
       device_id->mutable_gpu()->set_pci_domain(key.pci_domain);
       device_id->mutable_gpu()->set_pci_bus(key.pci_bus);
       device_id->mutable_gpu()->set_pci_device(key.pci_device);
       device_id->mutable_gpu()->set_pci_function(key.pci_function);
-    } else if (key.socket_index + key.core_index > 0) {
-      device_id->mutable_cpu()->set_socket_index(key.socket_index);
-      device_id->mutable_cpu()->set_core_index(key.core_index);
-    } else if (key.ifindex > 0) {
-      device_id->mutable_network()->set_ifindex(key.ifindex);
-    } else if (key.disk_major + key.disk_minor > 0) {
+    } else if (key.metric_type >= 400 && key.metric_type < 500) {
       device_id->mutable_disk()->set_major(key.disk_major);
       device_id->mutable_disk()->set_minor(key.disk_minor);
+    } else if (key.metric_type >= 500 && key.metric_type < 600) {
+      device_id->mutable_network()->set_ifindex(key.ifindex);
     }
 
+    batch.set_id(batch_id_counter_.fetch_add(1));
     batches.push_back(std::move(batch));
   }
 
   if (batches.empty()) {
+    std::cout << "No metrics to enqueue" << std::endl;
     return;
   }
 
@@ -154,8 +163,6 @@ void StreamMetricsReactor::EnqueueMetrics() {
     readermap_.emplace(batch.id(), batch);
     writerqu_.push(std::move(batch));
   }
-
-  Write();
 }
 
 }  // namespace client

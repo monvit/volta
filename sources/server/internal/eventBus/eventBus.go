@@ -3,8 +3,8 @@ package eventbus
 import (
 	"sync"
 
-	"github.com/monvit/volta/sources/server/internal/logger"
-	"github.com/monvit/volta/sources/server/pb/types"
+	"github.com/monvit/volta/server/internal/logger"
+	"github.com/monvit/volta/server/pb/types"
 )
 
 type EventBus struct {
@@ -13,15 +13,15 @@ type EventBus struct {
 }
 
 type Subscriber struct {
-	ch      chan *types.Metric
+	ch      chan *types.MetricBatch
 	agentID string
 }
 
-func (s *Subscriber) Ch() <-chan *types.Metric {
+func (s *Subscriber) Ch() <-chan *types.MetricBatch {
 	return s.ch
 }
 
-func (b *EventBus) Publish(agentID string, metric *types.Metric) {
+func (b *EventBus) Publish(agentID string, metric *types.MetricBatch) {
 	b.mu.RLock()
 	subs := b.subs[agentID]
 	b.mu.RUnlock()
@@ -36,7 +36,7 @@ func (b *EventBus) Publish(agentID string, metric *types.Metric) {
 
 func (b *EventBus) Subscribe(agentID string) *Subscriber {
 	sub := &Subscriber{
-		ch:      make(chan *types.Metric, 16),
+		ch:      make(chan *types.MetricBatch, 16),
 		agentID: agentID,
 	}
 	b.mu.Lock()

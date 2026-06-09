@@ -3,7 +3,7 @@ package registry
 import (
 	"sync"
 
-	session "github.com/monvit/volta/sources/server/internal/session"
+	session "github.com/monvit/volta/server/internal/session"
 )
 
 type AgentRegistry struct {

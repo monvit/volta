@@ -1,4 +1,4 @@
-module github.com/monvit/volta/sources/server
+module github.com/monvit/volta/server
 
 go 1.25.6
 

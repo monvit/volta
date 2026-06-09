@@ -5,7 +5,7 @@ package volta;
 import "google/protobuf/duration.proto";
 import "google/protobuf/timestamp.proto";
 
-option go_package = "github.com/monvit/volta/sources/server/pb/types;types";
+option go_package = "github.com/monvit/volta/server/pb/types;types";
 
 message ControlMessage {
   MessageType               type      = 1;

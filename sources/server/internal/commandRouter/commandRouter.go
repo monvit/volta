@@ -3,9 +3,9 @@ package commandrouter
 import (
 	"fmt"
 
-	controlmessage "github.com/monvit/volta/sources/server/internal/controlMessage"
-	"github.com/monvit/volta/sources/server/internal/registry"
-	pbt "github.com/monvit/volta/sources/server/pb/types"
+	controlmessage "github.com/monvit/volta/server/internal/controlMessage"
+	"github.com/monvit/volta/server/internal/registry"
+	pbt "github.com/monvit/volta/server/pb/types"
 )
 
 const (

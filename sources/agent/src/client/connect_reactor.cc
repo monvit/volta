@@ -11,6 +11,8 @@ namespace client {
 ConnectReactor::ConnectReactor(IMessageHandler* handler, const std::string& id,
                                ::volta::VoltaCollector::Stub* stub)
     : handler_(handler) {
+  std::cout << "Starting ConnectReactor for agent " << id << std::endl;
+
   context_.AddMetadata("agent-id", id);
   stub->async()->Connect(&context_, this);
 

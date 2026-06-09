@@ -26,6 +26,16 @@ const (
 	ERROR
 )
 
+// UnmarshalText implements encoding.TextUnmarshaler for parsing log level from config
+func (l *Level) UnmarshalText(text []byte) error {
+	level, err := ParseLevel(string(text))
+	if err != nil {
+		return err
+	}
+	*l = level
+	return nil
+}
+
 func ParseLevel(s string) (Level, error) {
 	switch strings.ToLower(s) {
 	case "debug":

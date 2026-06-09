@@ -30,7 +30,7 @@ class IReaderWriter : public IWriter<V> {
  protected:
   std::unordered_map<K, V> readermap_;
   bool reading_ = false;
-  T* msg;
+  T msg_;
   std::mutex mu_;
 };
 

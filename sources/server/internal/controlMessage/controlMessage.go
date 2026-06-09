@@ -1,7 +1,7 @@
 package controlmessage
 
 import (
-	pbt "github.com/monvit/volta/sources/server/pb/types"
+	pbt "github.com/monvit/volta/server/pb/types"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 

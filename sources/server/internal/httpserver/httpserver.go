@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
-	"log/slog"
 	"net/http"
 	"time"
 
@@ -13,10 +12,11 @@ import (
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 
-	commandrouter "github.com/monvit/volta/sources/server/internal/commandRouter"
-	"github.com/monvit/volta/sources/server/internal/hub"
-	"github.com/monvit/volta/sources/server/internal/registry"
-	pbt "github.com/monvit/volta/sources/server/pb/types"
+	commandrouter "github.com/monvit/volta/server/internal/commandRouter"
+	"github.com/monvit/volta/server/internal/hub"
+	"github.com/monvit/volta/server/internal/logger"
+	"github.com/monvit/volta/server/internal/registry"
+	pbt "github.com/monvit/volta/server/pb/types"
 )
 
 // ── HTTP Server ───────────────────────────────────────────────────────────────
@@ -116,7 +116,7 @@ func writeJSON(w http.ResponseWriter, status int, v any) {
 	if m, ok := v.(proto.Message); ok {
 		data, err := protojson.Marshal(m)
 		if err != nil {
-			slog.Error("protojson marshal failed", "err", err)
+			logger.Error("protojson marshal failed: %v", err)
 			return
 		}
 		w.Write(data)
@@ -124,7 +124,7 @@ func writeJSON(w http.ResponseWriter, status int, v any) {
 	}
 
 	if err := json.NewEncoder(w).Encode(v); err != nil {
-		slog.Error("json encode failed", "err", err)
+		logger.Error("json encode failed: %v", err)
 	}
 }
 
@@ -140,7 +140,7 @@ func writeError(w http.ResponseWriter, err error) {
 	case errors.Is(err, ErrAgentDisconnected):
 		http.Error(w, err.Error(), http.StatusServiceUnavailable)
 	default:
-		slog.Error("internal error", "err", err)
+		logger.Error("internal error: %v", err)
 		http.Error(w, "internal server error", http.StatusInternalServerError)
 	}
 }

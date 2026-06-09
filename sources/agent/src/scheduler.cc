@@ -29,7 +29,7 @@ void Scheduler::Run() {
       buffer_->AddMetrics(metrics);
     }
 
-    PrintDashboard();
+    // PrintDashboard();
 
     std::this_thread::sleep_for(config_.collection_interval);
   }

@@ -14,7 +14,7 @@ import (
 	"github.com/knadh/koanf/v2"
 	flag "github.com/spf13/pflag"
 
-	"github.com/monvit/volta/sources/server/internal/logger"
+	"github.com/monvit/volta/server/internal/logger"
 )
 
 const (
@@ -96,7 +96,7 @@ func Load() (*Config, error) {
 		}
 	}
 
-	// loading .env
+	// .env
 	if err := godotenv.Load(ENV_CONF); err != nil {
 		if os.IsNotExist(err) {
 			logger.Warn(".env file not found, skipping")
@@ -105,29 +105,30 @@ func Load() (*Config, error) {
 		}
 	}
 
-	// env
+	// ENV → dot notation
 	if err := k.Load(env.Provider("", ".", func(s string) string {
 		return strings.ToLower(strings.ReplaceAll(s, "_", "."))
 	}), nil); err != nil {
 		errs = append(errs, fmt.Errorf("env config: %w", err))
 	}
 
-	// flags
+	// FLAGS (SPÓJNE KLUCZE: DOT NOTATION)
 	f := flag.NewFlagSet("config", flag.ContinueOnError)
 
-	f.String("grpc-addr", ADDR_DEFAULT, "")
-	f.Uint("grpc-port", GRPCPORT_DEFAULT, "")
-	f.String("rest-addr", ADDR_DEFAULT, "")
-	f.Uint("rest-port", RESTPORT_DEFAULT, "")
-	f.Uint("buf-size", BUFSIZE_DEFAULT, "")
-	f.String("log-level", logger.LevelToString(LOGLEVEL_DEFAULT), "")
+	f.String("log.level", logger.LevelToString(LOGLEVEL_DEFAULT), "")
+	f.String("grpc.addr", ADDR_DEFAULT, "")
+	f.Uint("grpc.port", GRPCPORT_DEFAULT, "")
+	f.String("rest.addr", ADDR_DEFAULT, "")
+	f.Uint("rest.port", RESTPORT_DEFAULT, "")
+	f.Uint("buf.size", BUFSIZE_DEFAULT, "")
 
 	if err := f.Parse(os.Args[1:]); err != nil {
-		errs = append(errs, fmt.Errorf("flags: %w", err))
+		errs = append(errs, fmt.Errorf("flags parse: %w", err))
 	}
 
+	// FLAGS → koanf (już bez transformacji)
 	if err := k.Load(posflag.Provider(f, ".", k), nil); err != nil {
-		errs = append(errs, fmt.Errorf("flags: %w", err))
+		errs = append(errs, fmt.Errorf("flags load: %w", err))
 	}
 
 	cfg := Default()

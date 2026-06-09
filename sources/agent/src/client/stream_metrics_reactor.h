@@ -1,5 +1,5 @@
-#ifndef VOLTA_AGENT_CLIENT_STREAM_DATA_REACTOR_H_
-#define VOLTA_AGENT_CLIENT_STREAM_DATA_REACTOR_H_
+#ifndef VOLTA_AGENT_CLIENT_STREAM_METRICS_REACTOR_H_
+#define VOLTA_AGENT_CLIENT_STREAM_METRICS_REACTOR_H_
 
 #include <mutex>
 #include <random>
@@ -23,7 +23,11 @@ class StreamMetricsReactor
                        const std::string& id,
                        std::shared_ptr<::volta::agent::MetricsBuffer> buffer,
                        OnDoneCallback on_done);
-  ~StreamMetricsReactor() override = default;
+  ~StreamMetricsReactor() override {
+    std::cout << "StreamMetricsReactor destroyed for agent "
+              << context_.GetServerInitialMetadata().find("agent-id")->second
+              << std::endl;
+  }
 
   // ClientBidiReactor
   void OnReadDone(bool ok) override;
@@ -45,10 +49,12 @@ class StreamMetricsReactor
   grpc::ClientContext context_;
   std::mutex mu_;
   std::shared_ptr<::volta::agent::MetricsBuffer> buffer_;
+  std::jthread poll_thread_;
+  std::atomic<unsigned long long> batch_id_counter_{0};
 };
 
 }  // namespace client
 }  // namespace agent
 }  // namespace volta
 
-#endif  // VOLTA_AGENT_CLIENT_STREAM_DATA_REACTOR_H_
+#endif  // VOLTA_AGENT_CLIENT_STREAM_METRICS_REACTOR_H_

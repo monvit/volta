@@ -9,114 +9,7 @@ import "google/protobuf/empty.proto";
 import "types/transport.proto";
 import "types/metric.proto";
 
-option go_package = "github.com/monvit/volta/sources/server/pb;pb";
-
-service VoltaCollector {
-
-  // Client streaming RPC that allows the agent to send a stream of metrics to the server.
-  rpc StreamData(stream Metric) returns (google.protobuf.Empty);
-}
-=======
-package volta;
-
-
-enum MetricType {
-  METRIC_TYPE_UNSPECIFIED = 0;
-
-  // CPU — range [100, 199]
-  METRIC_TYPE_CPU_POWER_PACKAGE = 100;
-  METRIC_TYPE_CPU_POWER_CORES = 101;
-  METRIC_TYPE_CPU_CLOCK_SPEED = 102;
-  METRIC_TYPE_CPU_UTILIZATION = 103;
-  METRIC_TYPE_CPU_TEMPERATURE = 104;
-  METRIC_TYPE_CPU_IOWAIT = 105;
-  METRIC_TYPE_CPU_CACHE_HIT_RATIO = 106;
-  METRIC_TYPE_CPU_ACTIVE_PROCESSES = 107;
-
-  // GPU — range [200, 299]
-  METRIC_TYPE_GPU_POWER = 200;
-  METRIC_TYPE_GPU_CLOCK_SPEED = 201;
-  METRIC_TYPE_GPU_UTILIZATION = 202;
-  METRIC_TYPE_GPU_TEMPERATURE = 203;
-  METRIC_TYPE_GPU_VRAM_USED = 204;
-  METRIC_TYPE_GPU_PCIE_BANDWIDTH = 205;
-  METRIC_TYPE_GPU_COMPUTE_UNIT_UTILIZATION = 206;
-  METRIC_TYPE_GPU_SHARED_MEMORY_UTILIZATION = 207;
-  METRIC_TYPE_GPU_REGISTER_UTILIZATION = 208;
-
-  // RAM — range [300, 399]
-  METRIC_TYPE_RAM_POWER = 300;
-  METRIC_TYPE_RAM_TOTAL = 301;
-  METRIC_TYPE_RAM_AVAILABLE = 302;
-  METRIC_TYPE_RAM_USED = 303;
-  METRIC_TYPE_RAM_CACHED = 304;
-  METRIC_TYPE_SWAP_USED = 305;
-  METRIC_TYPE_SWAP_ACTIVITY = 306;
-
-  // Disk — range [400, 499]
-  METRIC_TYPE_DISK_READ_THROUGHPUT = 400;
-  METRIC_TYPE_DISK_WRITE_THROUGHPUT = 401;
-  METRIC_TYPE_DISK_READ_IOPS = 402;
-  METRIC_TYPE_DISK_WRITE_IOPS = 403;
-  METRIC_TYPE_DISK_BUSY_TIME = 404;
-  METRIC_TYPE_DISK_CAPACITY_USED = 405;
-
-  // Network — range [500, 599]
-  METRIC_TYPE_NET_BYTES_RECEIVED = 500;
-  METRIC_TYPE_NET_BYTES_SENT = 501;
-  METRIC_TYPE_NET_PACKETS_RECEIVED = 502;
-  METRIC_TYPE_NET_PACKETS_SENT = 503;
-}
-
-
-message GpuID {
-  uint32 pci_domain = 1;
-  uint32 pci_bus = 2;
-  uint32 pci_device = 3;
-  uint32 pci_function = 4;
-}
-
-message CpuID {
-  uint32 socket_index = 1;
-  uint32 core_index = 2;
-}
-
-message NetInterfaceID {
-  uint32 ifindex = 1;
-}
-
-message DiskID {
-  uint32 major = 1;
-  uint32 minor = 2;
-}
-
-message DeviceID {
-  oneof device {
-    GpuID gpu = 1;
-    CpuID cpu = 2;
-    NetInterfaceID network = 3;
-    DiskID disk = 4;
-  }
-}
-
-// Describes the metrics that are sent within a batch
-message BatchHeader {
-  MetricType metric_type = 1;
-  optional DeviceID device_id = 2;
-}
-
-// The server sends these back to acknowledge a batch.
-message BatchAck {
-  uint64 samples_received = 1;
-  optional string error = 2;
-}
-
-// Batch multiple metrics into one message to keep the header overhead low
-message MetricBatch {
-  BatchHeader header = 1;
-  repeated uint64 timestamps_ns = 2 [packed = true];
-  repeated double values = 3 [packed = true];
-}
+option go_package = "github.com/monvit/volta/server/pb;pb";
 
 // Unary calls over persistent channel
 service VoltaCollector {
@@ -125,5 +18,5 @@ service VoltaCollector {
   // Primarily used for pings and server requests that instruct the agent to send data.
   rpc Connect(stream ControlMessage) returns (stream ControlMessage);
 
-  rpc StreamMetrics(MetricBatch) returns (BatchAck);
+  rpc StreamMetrics(stream MetricBatch) returns (stream BatchAck);
 }
