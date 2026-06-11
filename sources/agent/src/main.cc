@@ -33,7 +33,7 @@ int main() {
     Scheduler scheduler(config, std::move(active_collectors));
     scheduler.Run();
 
-  } catch (const std::exception &e) {
+  } catch (const std::exception& e) {
     std::cerr << "CRITICAL ERROR: " << e.what() << std::endl;
     return 1;
   }
