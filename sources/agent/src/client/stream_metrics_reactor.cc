@@ -13,22 +13,47 @@ StreamMetricsReactor::StreamMetricsReactor(
   context_.AddMetadata("agent-id", id);
   stub->async()->StreamMetrics(&context_, this);
 
-  StartRead(&msg_);
+  StartCall();
+  StartRead(&ack_msg_);
 
   poll_thread_ = std::jthread([this](std::stop_token st) {
+    // TODO: we should consider using a more efficient synchronization mechanism
+    // to avoid polling in a loop like this, e.g. condition variable or similar
+    // to wake up immediately when new metrics are available or when an ACK is
+    // received, instead of just sleeping for a fixed interval.
     while (!st.stop_requested()) {
       if (st.stop_requested()) break;
 
-      EnqueueMetrics();
-      Write();
+      bool has_pending = false;
+      {
+        std::lock_guard l(snapshot_mu_);
+        has_pending = !pending_snapshots_.empty();
+      }
+
+      if (!has_pending) {
+        EnqueueMetrics();
+
+        {
+          std::lock_guard l(snapshot_mu_);
+          has_pending = !pending_snapshots_.empty();
+        }
+
+        if (!has_pending) {
+          // No metrics in the buffer, wait a bit before polling again.
+          // TODO: use condition variable or similar to wake up immediately when
+          // new metrics are available???
+          std::this_thread::sleep_for(std::chrono::seconds(1));
+        } else {
+          Write();
+        }
+        continue;
+      }
 
       // TODO: better handling of polling interval, maybe dynamic based on how
       // fast metrics are produced and acked?
-      std::this_thread::sleep_for(std::chrono::seconds(3));
+      std::this_thread::sleep_for(std::chrono::seconds(2));
     }
   });
-
-  StartCall();
 }
 
 void StreamMetricsReactor::OnReadDone(bool ok) {
@@ -37,20 +62,34 @@ void StreamMetricsReactor::OnReadDone(bool ok) {
     return;
   }
 
-  if (GetMessage(msg_.batch_id()) != nullptr) {
-    // std::cout << "Received ack for batch_id " << msg_.batch_id() << ",
-    // removing from readermap" << std::endl;
-    UnbindMessage(msg_.batch_id());
-  } else {
-    std::cout << "Received ack for unknown batch_id " << msg_.batch_id()
-              << std::endl;
+  BatchId batch_id = ack_msg_.batch_id();
+  std::cout << "Received ACK for batch_id " << batch_id << std::endl;
+
+  {
+    std::lock_guard l(snapshot_mu_);
+    auto it = pending_snapshots_.find(batch_id);
+    if (it != pending_snapshots_.end()) {
+      auto& [key, snapshot] = it->second;
+      buffer_->GetBuffer(key)->AckSnapshot(snapshot);
+      pending_snapshots_.erase(it);
+      // std::cout << "Acknowledged batch_id " << batch_id << ", pending
+      // snapshots: " << pending_snapshots_.size()
+      //           << std::endl;
+    } else {
+      // TODO: Server may have returned an ACK before we added the snapshot to
+      // pending_snapshots_, so this might be a normal occurrence. We should
+      // consider adding some buffering or delay to handle this case more
+      // gracefully instead of just printing an error.
+      std::cout << "Received ACK for unknown batch_id " << batch_id
+                << std::endl;
+    }
   }
 
-  if (msg_.has_error()) {
-    std::cerr << "Error: " << *msg_.mutable_error() << std::endl;
+  if (ack_msg_.has_error()) {
+    std::cerr << "Error: " << ack_msg_.error() << std::endl;
   }
 
-  StartRead(&msg_);
+  StartRead(&ack_msg_);
 }
 
 void StreamMetricsReactor::OnWriteDone(bool ok) {
@@ -60,48 +99,26 @@ void StreamMetricsReactor::OnWriteDone(bool ok) {
   }
 
   {
-    std::lock_guard l(mu_);
-
+    std::lock_guard l(write_mu_);
     writerqu_.pop();
     writing_ = false;
   }
 
-  // std::cout << "[" << std::chrono::system_clock::now() << "]"
-  //           << " Finished writing metric to server, queue size: " <<
-  //           writerqu_.size() << std::endl;
+  // std::cout << "Finished writing batch to server, queue size: " <<
+  // writerqu_.size() << " " << pending_snapshots_.size()
+  //           << std::endl;
 
-  EnqueueMetrics();
   Write();
 }
 
 void StreamMetricsReactor::OnDone(const grpc::Status& status) {
+  std::cout << "StreamMetricsReactor finished: " << status.error_message()
+            << std::endl;
   on_done_(status);
 }
 
-void StreamMetricsReactor::EnqueueWrite(::volta::MetricBatch msg) {
-  std::lock_guard<std::mutex> l(mu_);
-
-  readermap_[msg.id()] = msg;
-  writerqu_.push(std::move(msg));
-
-  Write();
-}
-
-void StreamMetricsReactor::BindMessage(const uint64_t& key,
-                                       ::volta::MetricBatch msg) {
-  std::lock_guard<std::mutex> l(mu_);
-
-  readermap_[key] = std::move(msg);
-}
-
-void StreamMetricsReactor::UnbindMessage(const uint64_t& key) {
-  std::lock_guard<std::mutex> l(mu_);
-
-  readermap_.erase(key);
-}
-
 void StreamMetricsReactor::Write() {
-  std::lock_guard<std::mutex> l(mu_);
+  std::lock_guard<std::mutex> l(write_mu_);
   if (writing_ || writerqu_.empty()) {
     return;
   }
@@ -112,57 +129,56 @@ void StreamMetricsReactor::Write() {
 }
 
 void StreamMetricsReactor::EnqueueMetrics() {
-  std::vector<::volta::MetricBatch> batches;
   auto keys = buffer_->GetAllKeys();
 
   for (const auto& key : keys) {
-    ::volta::agent::SeriesBuffer::Snapshot snapshot =
-        buffer_->GetBuffer(key)->GetSnapshot();
-
-    if (snapshot.samples.empty()) {
-      continue;
-    }
-
-    ::volta::MetricBatch batch;
-    for (const auto& sample : snapshot.samples) {
-      batch.add_timestamps_ns(sample.timestamp_ns);
-      batch.add_values(sample.value);
-    }
-
-    ::volta::BatchHeader* header = batch.mutable_header();
-    header->set_metric_type(static_cast<::volta::MetricType>(key.metric_type));
-
-    ::volta::DeviceID* device_id = header->mutable_device_id();
-
-    if (key.metric_type >= 100 && key.metric_type < 200) {
-      device_id->mutable_cpu()->set_socket_index(key.socket_index);
-      device_id->mutable_cpu()->set_core_index(key.core_index);
-    } else if (key.metric_type >= 200 && key.metric_type < 300) {
-      device_id->mutable_gpu()->set_pci_domain(key.pci_domain);
-      device_id->mutable_gpu()->set_pci_bus(key.pci_bus);
-      device_id->mutable_gpu()->set_pci_device(key.pci_device);
-      device_id->mutable_gpu()->set_pci_function(key.pci_function);
-    } else if (key.metric_type >= 400 && key.metric_type < 500) {
-      device_id->mutable_disk()->set_major(key.disk_major);
-      device_id->mutable_disk()->set_minor(key.disk_minor);
-    } else if (key.metric_type >= 500 && key.metric_type < 600) {
-      device_id->mutable_network()->set_ifindex(key.ifindex);
-    }
-
-    batch.set_id(batch_id_counter_.fetch_add(1));
-    batches.push_back(std::move(batch));
+    EnqueueMetrics(key);
   }
+}
 
-  if (batches.empty()) {
-    std::cout << "No metrics to enqueue" << std::endl;
+void StreamMetricsReactor::EnqueueMetrics(const BufferKey& key) {
+  ::volta::agent::SeriesBuffer::Snapshot snapshot =
+      buffer_->GetBuffer(key)->GetSnapshot();
+
+  if (snapshot.samples.empty()) {
     return;
   }
 
-  std::lock_guard<std::mutex> l(mu_);
-  for (auto& batch : batches) {
-    readermap_.emplace(batch.id(), batch);
-    writerqu_.push(std::move(batch));
+  ::volta::MetricBatch batch;
+  for (const auto& sample : snapshot.samples) {
+    batch.add_timestamps_ns(sample.timestamp_ns);
+    batch.add_values(sample.value);
   }
+
+  ::volta::BatchHeader* header = batch.mutable_header();
+  header->set_metric_type(static_cast<::volta::MetricType>(key.metric_type));
+
+  ::volta::DeviceID* device_id = header->mutable_device_id();
+
+  if (key.metric_type >= 100 && key.metric_type < 200) {
+    device_id->mutable_cpu()->set_socket_index(key.socket_index);
+    device_id->mutable_cpu()->set_core_index(key.core_index);
+  } else if (key.metric_type >= 200 && key.metric_type < 300) {
+    device_id->mutable_gpu()->set_pci_domain(key.pci_domain);
+    device_id->mutable_gpu()->set_pci_bus(key.pci_bus);
+    device_id->mutable_gpu()->set_pci_device(key.pci_device);
+    device_id->mutable_gpu()->set_pci_function(key.pci_function);
+  } else if (key.metric_type >= 400 && key.metric_type < 500) {
+    device_id->mutable_disk()->set_major(key.disk_major);
+    device_id->mutable_disk()->set_minor(key.disk_minor);
+  } else if (key.metric_type >= 500 && key.metric_type < 600) {
+    device_id->mutable_network()->set_ifindex(key.ifindex);
+  }
+
+  batch.set_id(batch_id_counter_.fetch_add(1));
+
+  {
+    std::lock_guard l(snapshot_mu_);
+    pending_snapshots_.emplace(batch.id(), std::make_pair(key, snapshot));
+  }
+
+  std::lock_guard<std::mutex> l(write_mu_);
+  writerqu_.push(std::move(batch));
 }
 
 }  // namespace client

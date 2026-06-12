@@ -22,7 +22,19 @@ Client::Client(std::shared_ptr<grpc::Channel> channel, config::Config& config,
 // options, etc.
 std::shared_ptr<grpc::Channel> Client::CreateChannel(
     const std::string& address) {
-  return grpc::CreateChannel(address, grpc::InsecureChannelCredentials());
+  auto channel =
+      grpc::CreateChannel(address, grpc::InsecureChannelCredentials());
+  if (!channel) {
+    return nullptr;
+  }
+
+  // TODO: consider making timeout configurable
+  if (!channel->WaitForConnected(std::chrono::system_clock::now() +
+                                 std::chrono::seconds(5))) {
+    return nullptr;
+  }
+
+  return channel;
 }
 
 bool Client::LoadUUID(std::string& out_uuid) {

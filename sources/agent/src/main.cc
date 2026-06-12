@@ -36,11 +36,14 @@ int main() {
     Scheduler scheduler(config, std::move(active_collectors), buffer);
 
     std::jthread grpc_thread([&scheduler, &config, &buffer]() {
-      client::Client grpc_client(
-          client::Client::CreateChannel(config.server_address + ":" +
-                                        std::to_string(config.server_port)),
-          config, buffer);
-      grpc_client.Connect();
+      if (auto channel = client::Client::CreateChannel(
+              config.server_address + ":" +
+              std::to_string(config.server_port))) {
+        client::Client grpc_client(channel, config, buffer);
+        grpc_client.Connect();
+      } else {
+        std::cerr << "Failed to create gRPC channel, exiting" << std::endl;
+      }
     });
 
     scheduler.Run();
