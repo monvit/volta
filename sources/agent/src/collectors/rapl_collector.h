@@ -7,7 +7,7 @@ namespace volta {
 namespace agent {
 namespace collectors {
 
-class RaplCollector : public RegisteredCollector<RaplCollector> {
+class RaplCollector final : public RegisteredCollector<RaplCollector> {
  public:
   RaplCollector();
   RaplCollector(const RaplCollector&) = delete;

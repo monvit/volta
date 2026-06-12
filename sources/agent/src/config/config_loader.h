@@ -19,9 +19,12 @@ class ConfigLoader {
 
  private:
   ConfigLoader() = delete;
+  ConfigLoader(const ConfigLoader&) = delete;
+  ConfigLoader(ConfigLoader&&) = delete;
+  void operator=(const ConfigLoader&) = delete;
+  void operator=(ConfigLoader&&) = delete;
 
   static void LoadConfigFile(Config& out_config);
-  static bool LoadUUID(Config& out_config);
   static void CreateUUID(Config& out_config);
   static void LoadCoreAffinity(toml::table& tbl, Config& out_config);
   static void LoadInterval(toml::table& tbl, Config& out_config);

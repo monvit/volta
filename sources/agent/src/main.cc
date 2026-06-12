@@ -5,6 +5,7 @@
 #include <thread>
 #include <vector>
 
+#include "client/volta_collector_client.h"
 #include "collectors/collector.h"
 #include "collectors/nvml_collector.h"
 #include "collectors/proc_stat_collector.h"
@@ -21,19 +22,29 @@ int main() {
   try {
     auto config = config::ConfigLoader::LoadConfig();
 
-    // platform::PlatformDetector detector;
-    // auto hw = detector.Detect();
-    // detector.PrintDetectedInfo(hw);
-
     auto active_collectors = collectors::CollectorRegistry::Instance().Resolve(
         config.requestedMetrics);
 
     std::cin.get();
 
-    Scheduler scheduler(config, std::move(active_collectors));
+    std::shared_ptr<MetricsBuffer> buffer =
+        std::make_shared<MetricsBuffer>(config);
+    Scheduler scheduler(config, std::move(active_collectors), buffer);
+
+    std::jthread grpc_thread([&scheduler, &config, &buffer]() {
+      if (auto channel = client::Client::CreateChannel(
+              config.server_address + ":" +
+              std::to_string(config.server_port))) {
+        client::Client grpc_client(channel, config, buffer);
+        grpc_client.Connect();
+      } else {
+        std::cerr << "Failed to create gRPC channel, exiting" << std::endl;
+      }
+    });
+
     scheduler.Run();
 
-  } catch (const std::exception &e) {
+  } catch (const std::exception& e) {
     std::cerr << "CRITICAL ERROR: " << e.what() << std::endl;
     return 1;
   }

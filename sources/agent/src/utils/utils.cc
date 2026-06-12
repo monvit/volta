@@ -2,13 +2,35 @@
 
 #include <arpa/inet.h>
 #include <netdb.h>
+#include <sched.h>
+#include <unistd.h>
 
 #include <iomanip>
+#include <iostream>
 #include <random>
 
 namespace volta {
 namespace agent {
 namespace utils {
+
+void PrintCurrentAffinity() {
+  cpu_set_t set;
+  CPU_ZERO(&set);
+
+  if (sched_getaffinity(0, sizeof(set), &set) != 0) {
+    // TODO: Log
+    perror("sched_getaffinity");
+    return;
+  }
+
+  long max_cpus = sysconf(_SC_NPROCESSORS_CONF);
+  std::cout << "Current CPU affinity: ";
+
+  for (int i = 0; i < max_cpus; ++i) {
+    if (CPU_ISSET(i, &set)) std::cout << i << " ";
+  }
+  std::cout << "\n";
+}
 
 bool IsValidIP(const std::string& ip) {
   sockaddr_in sa4{};

@@ -9,14 +9,16 @@ namespace volta {
 namespace agent {
 
 Scheduler::Scheduler(const config::Config& config,
-                     std::vector<collectors::Collector*>&& collectors)
-    : collectors_(std::move(collectors)), config_(config), buffer_(config) {}
+                     std::vector<collectors::Collector*>&& collectors,
+                     std::shared_ptr<MetricsBuffer> buffer)
+    : collectors_(std::move(collectors)), config_(config), buffer_(buffer) {}
 
 void Scheduler::Run() {
   for (auto collector : collectors_) {
     collector->Init();
   }
-  std::cout << "[" << config_.uuid << "] Starting collection loop (Interval: "
+
+  std::cout << "Starting collection loop (Interval: "
             << config_.collection_interval.count() << "ms)..." << std::endl;
 
   while (true) {
@@ -24,10 +26,10 @@ void Scheduler::Run() {
       // TODO: make the metrics collect into a preallocated tray
       //       instead of allocating new memory for each collection
       auto metrics = collector->Collect();
-      buffer_.AddMetrics(metrics);
+      buffer_->AddMetrics(metrics);
     }
 
-    PrintDashboard();
+    // PrintDashboard();
 
     std::this_thread::sleep_for(config_.collection_interval);
   }
@@ -66,7 +68,7 @@ void Scheduler::PrintDashboard() {
             << "\n";
   std::cout << "-----------------------------------------------\n";
 
-  auto latest = buffer_.LatestSamples();
+  auto latest = buffer_->LatestSamples();
   for (const auto& [key, sample] : latest) {
     auto metric_name =
         MetricType_Name(static_cast<MetricType>(key.metric_type));
@@ -83,7 +85,8 @@ void Scheduler::PrintDashboard() {
 
   std::cout << "-----------------------------------------------\n";
   std::cout << "Data points collected: " << latest.size() << "\n";
-  std::cout << "# of metrics buffered: " << buffer_.CapacityPerSeries() << "\n";
+  std::cout << "# of metrics buffered: " << buffer_->CapacityPerSeries()
+            << "\n";
   std::cout << "Press Ctrl+C to exit."
             << "\n";
   std::cout.flush();
