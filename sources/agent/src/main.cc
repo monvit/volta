@@ -22,10 +22,6 @@ int main() {
   try {
     auto config = config::ConfigLoader::LoadConfig();
 
-    platform::PlatformDetector detector;
-    auto hw = detector.Detect();
-    detector.PrintDetectedInfo(hw);
-
     auto active_collectors = collectors::CollectorRegistry::Instance().Resolve(
         config.requestedMetrics);
 
