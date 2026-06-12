@@ -11,7 +11,7 @@ namespace volta {
 namespace agent {
 namespace collectors {
 
-class NvmlCollector : public RegisteredCollector<NvmlCollector> {
+class NvmlCollector final : public RegisteredCollector<NvmlCollector> {
  public:
   NvmlCollector();
   ~NvmlCollector() override;

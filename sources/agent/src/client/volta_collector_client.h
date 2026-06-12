@@ -18,7 +18,7 @@ class MetricsBuffer;
 
 namespace client {
 
-class Client : public IMessageHandler {
+class Client final : public IMessageHandler {
  public:
   Client(std::shared_ptr<grpc::Channel> channel, config::Config& config,
          std::shared_ptr<::volta::agent::MetricsBuffer> buffer);

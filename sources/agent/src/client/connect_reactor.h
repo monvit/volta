@@ -14,9 +14,10 @@ namespace client {
 
 class IMessageHandler;
 
-class ConnectReactor : public grpc::ClientBidiReactor<::volta::ControlMessage,
-                                                      ::volta::ControlMessage>,
-                       public IWriter<::volta::ControlMessage> {
+class ConnectReactor final
+    : public grpc::ClientBidiReactor<::volta::ControlMessage,
+                                     ::volta::ControlMessage>,
+      public IWriter<::volta::ControlMessage> {
  public:
   explicit ConnectReactor(IMessageHandler* handler, const std::string& id,
                           ::volta::VoltaCollector::Stub* stub);

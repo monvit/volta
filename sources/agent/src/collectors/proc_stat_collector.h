@@ -9,7 +9,7 @@ namespace volta {
 namespace agent {
 namespace collectors {
 
-class ProcStatCollector : public RegisteredCollector<ProcStatCollector> {
+class ProcStatCollector final : public RegisteredCollector<ProcStatCollector> {
  public:
   bool Init() override;
   std::vector<Metric> Collect() override;

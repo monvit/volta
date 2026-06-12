@@ -15,7 +15,7 @@ namespace client {
 
 using namespace ::volta::agent;
 
-class StreamMetricsReactor
+class StreamMetricsReactor final
     : public grpc::ClientBidiReactor<::volta::MetricBatch, ::volta::BatchAck> {
  public:
   using OnDoneCallback = std::function<void(const grpc::Status&)>;
