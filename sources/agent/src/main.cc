@@ -25,8 +25,6 @@ int main() {
     auto active_collectors = collectors::CollectorRegistry::Instance().Resolve(
         config.requestedMetrics);
 
-    std::cin.get();
-
     std::shared_ptr<MetricsBuffer> buffer =
         std::make_shared<MetricsBuffer>(config);
     Scheduler scheduler(config, std::move(active_collectors), buffer);
@@ -39,6 +37,7 @@ int main() {
         grpc_client.Connect();
       } else {
         std::cerr << "Failed to create gRPC channel, exiting" << std::endl;
+        scheduler.print_dashboard.store(true);
       }
     });
 
