@@ -22,21 +22,7 @@ export default defineConfig({
     rules: {
       "react/rules-of-hooks": "error",
       "react/exhaustive-deps": "warn",
-      "react/only-export-components": [
-        "error",
-        {
-          allowConstantExport: true,
-        },
-      ],
     },
-    overrides: [
-      {
-        files: ["src/components/ui/**"],
-        rules: {
-          "react/only-export-components": "off",
-        },
-      },
-    ],
   },
   plugins: [react(), babel({ presets: [reactCompilerPreset()] }), tailwindcss()],
   resolve: {
