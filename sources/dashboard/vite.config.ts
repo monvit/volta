@@ -6,6 +6,8 @@ import path from "path";
 
 // https://vite.dev/config/
 export default defineConfig({
+  // Project Pages: https://monvit.github.io/volta/
+  base: process.env.GITHUB_PAGES ? "/volta/" : "/",
   fmt: {
     ignorePatterns: [],
   },
