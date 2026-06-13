@@ -79,6 +79,10 @@ bool ReadTextFile(const std::filesystem::path& path, std::string* value) {
   return ok;
 }
 
+bool CanReadFile(const std::filesystem::path& path) {
+  return access(path.c_str(), R_OK) == 0;
+}
+
 std::optional<uint32_t> ParseSocketIndex(const std::string& name) {
   constexpr std::string_view kPrefix = "package-";
   if (!name.starts_with(kPrefix)) return std::nullopt;
@@ -119,7 +123,8 @@ std::vector<DiscoveredZone> DiscoverZones() {
     const auto name_path = path / kNameFile;
     const auto energy_path = path / kEnergyFile;
     if (!std::filesystem::exists(name_path, ec) ||
-        !std::filesystem::exists(energy_path, ec)) {
+        !std::filesystem::exists(energy_path, ec) || !CanReadFile(name_path) ||
+        !CanReadFile(energy_path)) {
       ec.clear();
       continue;
     }
