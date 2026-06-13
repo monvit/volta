@@ -21,6 +21,8 @@ class Scheduler {
 
   void Run();
 
+  std::atomic<bool> print_dashboard = false;
+
  private:
   void PrintDashboard();
   static std::string DescribeKey(const BufferKey& key);
