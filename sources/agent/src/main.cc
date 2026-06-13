@@ -25,8 +25,6 @@ int main() {
     auto active_collectors = collectors::CollectorRegistry::Instance().Resolve(
         config.requestedMetrics);
 
-    std::cin.get();
-
     std::shared_ptr<MetricsBuffer> buffer =
         std::make_shared<MetricsBuffer>(config);
     Scheduler scheduler(config, std::move(active_collectors), buffer);
