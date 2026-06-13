@@ -48,6 +48,7 @@ func (s *HTTPServer) routes() *chi.Mux {
 	mux.Use(middleware.RequestID)
 	mux.Use(middleware.RealIP)
 	mux.Use(middleware.Recoverer)
+	mux.Use(corsMiddleware)
 	mux.Use(middleware.Timeout(30 * time.Second))
 
 	mux.Route("/api", func(r chi.Router) {
@@ -59,6 +60,21 @@ func (s *HTTPServer) routes() *chi.Mux {
 	mux.Get("/ws", s.hub.HandleWS)
 
 	return mux
+}
+
+func corsMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Accept")
+
+		if r.Method == http.MethodOptions {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+
+		next.ServeHTTP(w, r)
+	})
 }
 
 // ── Handlers ──────────────────────────────────────────────────────────────────
