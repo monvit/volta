@@ -13,6 +13,5 @@ language-servers = ["clangd"]
 command = "clangd"
 args = [
   "--header-insertion=never",
-  "--query-driver=/usr/bin/g++,/usr/bin/c++",
   "--compile-commands-dir=build"
 ]
