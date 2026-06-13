@@ -83,7 +83,9 @@ std::vector<Metric> NvmlCollector::Collect() {
 
   std::vector<Metric> metrics;
   unsigned int power_mw = 0;
-  auto now = std::chrono::system_clock::now().time_since_epoch().count();
+  auto now = std::chrono::duration_cast<std::chrono::nanoseconds>(
+                 std::chrono::system_clock::now().time_since_epoch())
+                 .count();
 
   auto needs = [&](MetricType type) {
     return std::find(requested_metrics_.begin(), requested_metrics_.end(),
