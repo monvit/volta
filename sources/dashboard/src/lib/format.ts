@@ -34,11 +34,7 @@ export function formatNumber(value: number, digits = autoDigits(value)) {
   return nf(digits).format(value);
 }
 
-function formatScaled(
-  value: number,
-  base: number,
-  units: readonly string[],
-) {
+function formatScaled(value: number, base: number, units: readonly string[]) {
   if (!Number.isFinite(value)) return { value: "—", unit: units[0] };
   let v = value;
   let i = 0;
@@ -85,11 +81,7 @@ export function formatCount(value: number) {
   return { value: formatNumber(value, 0), unit: "" };
 }
 
-export function withUnit(
-  value: number,
-  unit: string,
-  digits?: number,
-) {
+export function withUnit(value: number, unit: string, digits?: number) {
   return { value: formatNumber(value, digits), unit };
 }
 

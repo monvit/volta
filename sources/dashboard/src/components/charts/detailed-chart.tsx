@@ -136,9 +136,7 @@ export function DetailedChart({
 
   return (
     <div ref={ref} className={className}>
-      {width > 0 && ready && (
-        <UplotReact options={options} data={data} resetScales={resetScales} />
-      )}
+      {width > 0 && ready && <UplotReact options={options} data={data} resetScales={resetScales} />}
     </div>
   );
 }

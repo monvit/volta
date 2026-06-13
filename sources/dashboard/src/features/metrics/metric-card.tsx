@@ -18,15 +18,11 @@ export function MetricCard({
 
   return (
     <button type="button" onClick={() => onOpen(series.key)} className="block text-left">
-      <Card
-        className="cursor-pointer gap-3 transition-all hover:ring-foreground/25 focus-visible:ring-ring/50"
-      >
+      <Card className="cursor-pointer gap-3 transition-all hover:ring-foreground/25 focus-visible:ring-ring/50">
         <div className="flex items-start justify-between gap-2 px-(--card-spacing)">
           <span className="truncate text-sm text-muted-foreground">{series.label}</span>
           {series.deviceLabel && (
-            <span className="shrink-0 text-xs text-muted-foreground/70">
-              {series.deviceLabel}
-            </span>
+            <span className="shrink-0 text-xs text-muted-foreground/70">{series.deviceLabel}</span>
           )}
         </div>
         <div className="flex items-baseline gap-1.5 px-(--card-spacing)">

@@ -4,10 +4,7 @@ import type uPlot from "uplot";
 
 type OptionsUpdateState = "keep" | "update" | "create";
 
-export function optionsUpdateState(
-  lhsOptions: uPlot.Options,
-  rhsOptions: uPlot.Options,
-) {
+export function optionsUpdateState(lhsOptions: uPlot.Options, rhsOptions: uPlot.Options) {
   const { width: lhsWidth, height: lhsHeight, ...lhs } = lhsOptions;
   const { width: rhsWidth, height: rhsHeight, ...rhs } = rhsOptions;
 

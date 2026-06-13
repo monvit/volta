@@ -81,8 +81,7 @@ export function UplotReact({
         propDataRef.current = data;
         create();
       } else if (!dataMatch(propDataRef.current, data)) {
-        const shouldResetScales =
-          typeof resetScales === "function" ? resetScales() : resetScales;
+        const shouldResetScales = typeof resetScales === "function" ? resetScales() : resetScales;
         chartRef.current.setData(data, shouldResetScales);
         if (!shouldResetScales) chartRef.current.redraw();
       }
