@@ -1,7 +1,5 @@
 #include "collectors/nvml_collector.h"
 
-#include <dlfcn.h>
-
 #include <algorithm>
 #include <chrono>
 #include <iostream>
@@ -14,32 +12,39 @@ NvmlCollector::NvmlCollector() = default;
 
 NvmlCollector::~NvmlCollector() {
   if (initialized_) {
-    nvmlShutdown();
+    nvml_->Shutdown();
   }
 }
 
 bool NvmlCollector::Init() {
-  nvmlReturn_t result = nvmlInit();
-  if (result != NVML_SUCCESS) {
-    std::cerr << "Failed to initialize NVML: " << nvmlErrorString(result)
+  const platform::NvmlApi* nvml = platform::TryLoadNvml();
+  if (nvml == nullptr) {
+    std::cerr << "Failed to load NVML: " << platform::NvmlLoadError()
               << std::endl;
     return false;
   }
 
-  result = nvmlDeviceGetHandleByIndex(0, &device_handle_);
+  nvmlReturn_t result = nvml->Init();
   if (result != NVML_SUCCESS) {
-    std::cerr << "Failed to get device handle: " << nvmlErrorString(result)
+    std::cerr << "Failed to initialize NVML: " << nvml->ErrorString(result)
               << std::endl;
-    nvmlShutdown();
+    return false;
+  }
+
+  result = nvml->DeviceGetHandleByIndex(0, &device_handle_);
+  if (result != NVML_SUCCESS) {
+    std::cerr << "Failed to get device handle: " << nvml->ErrorString(result)
+              << std::endl;
+    nvml->Shutdown();
     return false;
   }
 
   nvmlPciInfo_t pci_info;
-  result = nvmlDeviceGetPciInfo(device_handle_, &pci_info);
+  result = nvml->DeviceGetPciInfo(device_handle_, &pci_info);
   if (result != NVML_SUCCESS) {
-    std::cerr << "Failed to get PCI info: " << nvmlErrorString(result)
+    std::cerr << "Failed to get PCI info: " << nvml->ErrorString(result)
               << std::endl;
-    nvmlShutdown();
+    nvml->Shutdown();
     return false;
   }
 
@@ -50,26 +55,32 @@ bool NvmlCollector::Init() {
   gpu_id.set_pci_function(0);
   gpu_id_ = std::move(gpu_id);
 
+  nvml_ = nvml;
   initialized_ = true;
   return true;
 }
 
 bool NvmlCollector::IsSupported() {
-  nvmlReturn_t result = nvmlInit();
+  const platform::NvmlApi* nvml = platform::TryLoadNvml();
+  if (nvml == nullptr) {
+    return false;
+  }
+
+  nvmlReturn_t result = nvml->Init();
   if (result != NVML_SUCCESS) {
     return false;
   }
 
   unsigned int device_count = 0;
-  result = nvmlDeviceGetCount(&device_count);
+  result = nvml->DeviceGetCount(&device_count);
   if (result != NVML_SUCCESS || device_count == 0) {
-    nvmlShutdown();
+    nvml->Shutdown();
     return false;
   }
 
   nvmlDevice_t device;
-  result = nvmlDeviceGetHandleByIndex(0, &device);
-  nvmlShutdown();
+  result = nvml->DeviceGetHandleByIndex(0, &device);
+  nvml->Shutdown();
   return result == NVML_SUCCESS;
 }
 
@@ -81,6 +92,7 @@ void NvmlCollector::SetRequestedMetrics(
 std::vector<Metric> NvmlCollector::Collect() {
   if (!initialized_ || requested_metrics_.empty()) return {};
 
+  const auto& nvml = *nvml_;
   std::vector<Metric> metrics;
   unsigned int power_mw = 0;
   auto now = std::chrono::system_clock::now().time_since_epoch().count();
@@ -92,7 +104,7 @@ std::vector<Metric> NvmlCollector::Collect() {
 
   nvmlReturn_t result;
   if (needs(MetricType::METRIC_TYPE_GPU_POWER)) {
-    result = nvmlDeviceGetPowerUsage(device_handle_, &power_mw);
+    result = nvml.DeviceGetPowerUsage(device_handle_, &power_mw);
     if (result == NVML_SUCCESS) {
       metrics.push_back({MetricType::METRIC_TYPE_GPU_POWER, gpu_id_,
                          static_cast<double>(power_mw) / 1000.0, now});
@@ -101,8 +113,8 @@ std::vector<Metric> NvmlCollector::Collect() {
 
   if (needs(MetricType::METRIC_TYPE_GPU_TEMPERATURE)) {
     unsigned int temp_c = 0;
-    result =
-        nvmlDeviceGetTemperature(device_handle_, NVML_TEMPERATURE_GPU, &temp_c);
+    result = nvml.DeviceGetTemperature(device_handle_, NVML_TEMPERATURE_GPU,
+                                       &temp_c);
     if (result == NVML_SUCCESS) {
       metrics.push_back({MetricType::METRIC_TYPE_GPU_TEMPERATURE, gpu_id_,
                          static_cast<double>(temp_c), now});
@@ -112,7 +124,7 @@ std::vector<Metric> NvmlCollector::Collect() {
   if (needs(MetricType::METRIC_TYPE_GPU_UTILIZATION) ||
       needs(MetricType::METRIC_TYPE_GPU_SHARED_MEMORY_UTILIZATION)) {
     nvmlUtilization_t utilization;
-    result = nvmlDeviceGetUtilizationRates(device_handle_, &utilization);
+    result = nvml.DeviceGetUtilizationRates(device_handle_, &utilization);
     if (result == NVML_SUCCESS) {
       if (needs(MetricType::METRIC_TYPE_GPU_UTILIZATION)) {
         metrics.push_back({MetricType::METRIC_TYPE_GPU_UTILIZATION, gpu_id_,
@@ -128,7 +140,7 @@ std::vector<Metric> NvmlCollector::Collect() {
 
   if (needs(MetricType::METRIC_TYPE_GPU_VRAM_USED)) {
     nvmlMemory_t memory;
-    result = nvmlDeviceGetMemoryInfo(device_handle_, &memory);
+    result = nvml.DeviceGetMemoryInfo(device_handle_, &memory);
     if (result == NVML_SUCCESS) {
       metrics.push_back(
           {MetricType::METRIC_TYPE_GPU_VRAM_USED, gpu_id_,
