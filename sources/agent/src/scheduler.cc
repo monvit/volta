@@ -1,9 +1,91 @@
 #include "scheduler.h"
 
+#include <chrono>
 #include <iomanip>
 #include <iostream>
 #include <sstream>
 #include <thread>
+
+namespace {
+
+std::string FormatFixed(double value, const char* unit, int precision = 2) {
+  std::ostringstream out;
+  out << std::fixed << std::setprecision(precision) << value;
+  if (unit != nullptr && *unit != '\0') {
+    out << ' ' << unit;
+  }
+  return out.str();
+}
+
+std::string FormatBytesMiB(double bytes) {
+  return FormatFixed(bytes / (1024.0 * 1024.0), "MiB");
+}
+
+std::string FormatPercent(double value) { return FormatFixed(value, "%"); }
+
+std::string FormatTemperatureC(double value) {
+  return FormatFixed(value, "°C");
+}
+
+std::string FormatPowerW(double watts) { return FormatFixed(watts, "W"); }
+
+std::string FormatEnergyJ(double joules) { return FormatFixed(joules, "J"); }
+
+std::string FormatMetricValue(volta::MetricType type, double value,
+                              std::chrono::milliseconds interval) {
+  using volta::MetricType;
+
+  switch (type) {
+    case MetricType::METRIC_TYPE_CPU_UTILIZATION:
+    case MetricType::METRIC_TYPE_GPU_UTILIZATION:
+    case MetricType::METRIC_TYPE_GPU_SHARED_MEMORY_UTILIZATION:
+    case MetricType::METRIC_TYPE_CPU_IOWAIT:
+    case MetricType::METRIC_TYPE_CPU_CACHE_HIT_RATIO:
+    case MetricType::METRIC_TYPE_SWAP_ACTIVITY:
+    case MetricType::METRIC_TYPE_DISK_BUSY_TIME:
+      return FormatPercent(value);
+
+    case MetricType::METRIC_TYPE_GPU_VRAM_USED:
+      // NVML reports this collector as a ratio of used / total.
+      return FormatPercent(value * 100.0);
+
+    case MetricType::METRIC_TYPE_GPU_TEMPERATURE:
+    case MetricType::METRIC_TYPE_CPU_TEMPERATURE:
+      return FormatTemperatureC(value);
+
+    case MetricType::METRIC_TYPE_GPU_POWER:
+    case MetricType::METRIC_TYPE_CPU_POWER_CORES:
+    case MetricType::METRIC_TYPE_RAM_POWER:
+      return FormatPowerW(value);
+
+    case MetricType::METRIC_TYPE_CPU_POWER_PACKAGE: {
+      const double seconds = std::chrono::duration<double>(interval).count();
+      if (seconds > 0.0) {
+        return FormatPowerW(value / seconds);
+      }
+      return FormatEnergyJ(value);
+    }
+
+    case MetricType::METRIC_TYPE_RAM_TOTAL:
+    case MetricType::METRIC_TYPE_RAM_AVAILABLE:
+    case MetricType::METRIC_TYPE_RAM_USED:
+    case MetricType::METRIC_TYPE_RAM_CACHED:
+    case MetricType::METRIC_TYPE_SWAP_USED:
+    case MetricType::METRIC_TYPE_DISK_CAPACITY_USED:
+    case MetricType::METRIC_TYPE_NET_BYTES_RECEIVED:
+    case MetricType::METRIC_TYPE_NET_BYTES_SENT:
+      return FormatBytesMiB(value);
+
+    case MetricType::METRIC_TYPE_DISK_READ_THROUGHPUT:
+    case MetricType::METRIC_TYPE_DISK_WRITE_THROUGHPUT:
+      return FormatFixed(value / (1024.0 * 1024.0), "MiB/s");
+
+    default:
+      return FormatFixed(value, "");
+  }
+}
+
+}  // namespace
 
 namespace volta {
 namespace agent {
@@ -63,8 +145,7 @@ void Scheduler::PrintDashboard() {
   std::cout << "===============================================\n";
 
   std::cout << std::left << std::setw(42) << "METRIC NAME" << std::setw(38)
-            << "DEVICE"
-            << "    " << std::fixed << "VALUE"
+            << "DEVICE" << std::setw(18) << "VALUE" << "TIMESTAMP"
             << "\n";
   std::cout << "-----------------------------------------------\n";
 
@@ -78,9 +159,10 @@ void Scheduler::PrintDashboard() {
     }
 
     std::cout << std::left << std::setw(42) << metric_name << std::setw(38)
-              << DescribeKey(key) << "    " << std::fixed
-              << std::setprecision(2) << sample.value << " @ "
-              << sample.timestamp_ns << "\n";
+              << DescribeKey(key) << std::setw(18)
+              << FormatMetricValue(static_cast<MetricType>(key.metric_type),
+                                   sample.value, config_.collection_interval)
+              << ' ' << sample.timestamp_ns << "\n";
   }
 
   std::cout << "-----------------------------------------------\n";
