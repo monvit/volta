@@ -75,5 +75,3 @@ export function chartTooltipPlugin(formatValue: (value: number) => string): uPlo
     },
   };
 }
-
-
