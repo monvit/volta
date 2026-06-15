@@ -144,9 +144,8 @@ void Scheduler::PrintDashboard() {
   std::cout << "    VOLTA AGENT - ACTIVE MONITOR    \n";
   std::cout << "===============================================\n";
 
-  std::cout << std::left << std::setw(42) << "METRIC NAME" << std::setw(38)
-            << "DEVICE" << std::setw(18) << "VALUE" << "TIMESTAMP"
-            << "\n";
+  std::cout << std::left << std::setw(35) << "METRIC NAME" << std::setw(20)
+            << "DEVICE" << std::setw(18) << "VALUE" << "\n";
   std::cout << "-----------------------------------------------\n";
 
   auto latest = buffer_->LatestSamples();
@@ -158,11 +157,11 @@ void Scheduler::PrintDashboard() {
       metric_name = metric_name.substr(prefix.size());
     }
 
-    std::cout << std::left << std::setw(42) << metric_name << std::setw(38)
-              << DescribeKey(key) << std::setw(18)
+    std::cout << std::left << std::setw(35) << metric_name << std::setw(20)
+              << DescribeKey(key) << std::setw(10)
               << FormatMetricValue(static_cast<MetricType>(key.metric_type),
                                    sample.value, config_.collection_interval)
-              << ' ' << sample.timestamp_ns << "\n";
+              << '\n';
   }
 
   std::cout << "-----------------------------------------------\n";
