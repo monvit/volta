@@ -50,7 +50,7 @@ type GRPCConfig struct {
 type RESTConfig struct {
 	Addr           string   `koanf:"addr"`
 	Port           uint16   `koanf:"port"`
-	AllowedOrigins []string `koanf:"allowed_origins"`
+	AllowedOrigins []string `koanf:"origins"`
 }
 
 type BufferConfig struct {
@@ -128,7 +128,7 @@ func Load() (*Config, error) {
 	f.Uint("grpc.port", GRPCPORT_DEFAULT, "")
 	f.String("rest.addr", ADDR_DEFAULT, "")
 	f.Uint("rest.port", RESTPORT_DEFAULT, "")
-	f.StringSlice("rest.allowed-origins", DefaultAllowedOrigins, "")
+	f.StringSlice("rest.origins", DefaultAllowedOrigins, "")
 	f.Uint("buf.size", BUFSIZE_DEFAULT, "")
 
 	if err := f.Parse(os.Args[1:]); err != nil {
