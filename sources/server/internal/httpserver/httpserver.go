@@ -22,11 +22,11 @@ import (
 // ── HTTP Server ───────────────────────────────────────────────────────────────
 
 type HTTPServer struct {
-	registry        *registry.AgentRegistry
-	router          *commandrouter.CommandRouter
-	hub             *hub.WSHub
-	allowedOrigins  []string
-	mux             *chi.Mux
+	registry       *registry.AgentRegistry
+	router         *commandrouter.CommandRouter
+	hub            *hub.WSHub
+	allowedOrigins []string
+	mux            *chi.Mux
 }
 
 func NewHTTPServer(
