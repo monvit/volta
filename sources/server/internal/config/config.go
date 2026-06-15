@@ -29,6 +29,12 @@ const (
 	ENV_CONF   = ".env"
 )
 
+var DefaultAllowedOrigins = []string{
+	"http://localhost:5173",
+	"http://127.0.0.1:5173",
+	"https://monvit.github.io",
+}
+
 type Config struct {
 	GRPC GRPCConfig   `koanf:"grpc"`
 	REST RESTConfig   `koanf:"rest"`
@@ -42,8 +48,9 @@ type GRPCConfig struct {
 }
 
 type RESTConfig struct {
-	Addr string `koanf:"addr"`
-	Port uint16 `koanf:"port"`
+	Addr           string   `koanf:"addr"`
+	Port           uint16   `koanf:"port"`
+	AllowedOrigins []string `koanf:"allowed_origins"`
 }
 
 type BufferConfig struct {
@@ -61,8 +68,9 @@ func Default() *Config {
 			Port: GRPCPORT_DEFAULT,
 		},
 		REST: RESTConfig{
-			Addr: ADDR_DEFAULT,
-			Port: RESTPORT_DEFAULT,
+			Addr:           ADDR_DEFAULT,
+			Port:           RESTPORT_DEFAULT,
+			AllowedOrigins: append([]string(nil), DefaultAllowedOrigins...),
 		},
 		Buf: BufferConfig{
 			Size: BUFSIZE_DEFAULT,
@@ -120,6 +128,7 @@ func Load() (*Config, error) {
 	f.Uint("grpc.port", GRPCPORT_DEFAULT, "")
 	f.String("rest.addr", ADDR_DEFAULT, "")
 	f.Uint("rest.port", RESTPORT_DEFAULT, "")
+	f.StringSlice("rest.allowed-origins", DefaultAllowedOrigins, "")
 	f.Uint("buf.size", BUFSIZE_DEFAULT, "")
 
 	if err := f.Parse(os.Args[1:]); err != nil {

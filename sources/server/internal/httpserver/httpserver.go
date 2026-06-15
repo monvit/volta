@@ -22,17 +22,24 @@ import (
 // ── HTTP Server ───────────────────────────────────────────────────────────────
 
 type HTTPServer struct {
-	registry *registry.AgentRegistry
-	router   *commandrouter.CommandRouter
-	hub      *hub.WSHub
-	mux      *chi.Mux
+	registry        *registry.AgentRegistry
+	router          *commandrouter.CommandRouter
+	hub             *hub.WSHub
+	allowedOrigins  []string
+	mux             *chi.Mux
 }
 
-func NewHTTPServer(registry *registry.AgentRegistry, router *commandrouter.CommandRouter, hub *hub.WSHub) *HTTPServer {
+func NewHTTPServer(
+	registry *registry.AgentRegistry,
+	router *commandrouter.CommandRouter,
+	hub *hub.WSHub,
+	allowedOrigins []string,
+) *HTTPServer {
 	s := &HTTPServer{
-		registry: registry,
-		router:   router,
-		hub:      hub,
+		registry:       registry,
+		router:         router,
+		hub:            hub,
+		allowedOrigins: allowedOrigins,
 	}
 	s.mux = s.routes()
 	return s
@@ -48,7 +55,7 @@ func (s *HTTPServer) routes() *chi.Mux {
 	mux.Use(middleware.RequestID)
 	mux.Use(middleware.RealIP)
 	mux.Use(middleware.Recoverer)
-	mux.Use(corsMiddleware)
+	mux.Use(corsMiddleware(s.allowedOrigins))
 	mux.Use(middleware.Timeout(30 * time.Second))
 
 	mux.Route("/api", func(r chi.Router) {
@@ -62,19 +69,50 @@ func (s *HTTPServer) routes() *chi.Mux {
 	return mux
 }
 
-func corsMiddleware(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Access-Control-Allow-Origin", "*")
-		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Accept")
+func corsMiddleware(allowedOrigins []string) func(http.Handler) http.Handler {
+	allowed := make(map[string]struct{}, len(allowedOrigins))
+	for _, origin := range allowedOrigins {
+		allowed[origin] = struct{}{}
+	}
 
-		if r.Method == http.MethodOptions {
-			w.WriteHeader(http.StatusNoContent)
-			return
+	isAllowed := func(origin string) bool {
+		if origin == "" {
+			return true
 		}
+		_, ok := allowed[origin]
+		return ok
+	}
 
-		next.ServeHTTP(w, r)
-	})
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			origin := r.Header.Get("Origin")
+			if origin == "" {
+				next.ServeHTTP(w, r)
+				return
+			}
+
+			if !isAllowed(origin) {
+				if r.Method == http.MethodOptions {
+					http.Error(w, "origin not allowed", http.StatusForbidden)
+					return
+				}
+				next.ServeHTTP(w, r)
+				return
+			}
+
+			w.Header().Set("Access-Control-Allow-Origin", origin)
+			w.Header().Set("Vary", "Origin")
+			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Accept")
+
+			if r.Method == http.MethodOptions {
+				w.WriteHeader(http.StatusNoContent)
+				return
+			}
+
+			next.ServeHTTP(w, r)
+		})
+	}
 }
 
 // ── Handlers ──────────────────────────────────────────────────────────────────
