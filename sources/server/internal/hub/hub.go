@@ -26,14 +26,24 @@ type WSHub struct {
 	mu       sync.Mutex
 }
 
-func New(bus *eventbus.EventBus) *WSHub {
+func New(bus *eventbus.EventBus, allowedOrigins []string) *WSHub {
+	allowed := make(map[string]struct{}, len(allowedOrigins))
+	for _, origin := range allowedOrigins {
+		allowed[origin] = struct{}{}
+	}
+
 	return &WSHub{
 		bus: bus,
 		upgrader: websocket.Upgrader{
 			ReadBufferSize:  1024,
 			WriteBufferSize: 1024,
 			CheckOrigin: func(r *http.Request) bool {
-				return true
+				origin := r.Header.Get("Origin")
+				if origin == "" {
+					return true
+				}
+				_, ok := allowed[origin]
+				return ok
 			},
 		},
 		register: make(chan *WSClient, 16),

@@ -42,7 +42,7 @@ func main() {
 	registry := &registry.AgentRegistry{}
 	bus := eventbus.New()
 	router := commandrouter.New(registry)
-	hub := hub.New(bus)
+	hub := hub.New(bus, cfg.REST.AllowedOrigins)
 	go hub.Run()
 
 	// gRPC
@@ -60,7 +60,7 @@ func main() {
 	}()
 
 	// HTTP
-	httpSrv := httpserver.NewHTTPServer(registry, router, hub)
+	httpSrv := httpserver.NewHTTPServer(registry, router, hub, cfg.REST.AllowedOrigins)
 	srv := &http.Server{
 		Addr:         net.JoinHostPort(cfg.REST.Addr, strconv.Itoa(int(cfg.REST.Port))),
 		Handler:      httpSrv,
