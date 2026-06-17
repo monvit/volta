@@ -36,7 +36,8 @@ int main() {
         client::Client grpc_client(channel, config, buffer);
         grpc_client.Connect();
       } else {
-        std::cerr << "Failed to create gRPC channel, exiting" << std::endl;
+        std::cerr << "Failed to create gRPC channel, falling back to local dashboard" << std::endl;
+        scheduler.print_dashboard.store(true);
       }
     });
 

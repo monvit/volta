@@ -1,0 +1,78 @@
+name: Dashboard CI
+
+on:
+  push:
+    branches: [ "main", "devel" ]
+    paths:
+      - 'sources/dashboard/**'
+      - '.github/workflows/dashboard_ci.yml'
+  pull_request:
+    branches: [ "main", "devel" ]
+    paths:
+      - 'sources/dashboard/**'
+      - '.github/workflows/dashboard_ci.yml'
+
+jobs:
+  check-and-build:
+    name: Lint, Format & Build
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: sources/dashboard
+
+    steps:
+    - uses: actions/checkout@v6
+
+    - uses: voidzero-dev/setup-vp@v1
+      with:
+        node-version: '24'
+        working-directory: sources/dashboard
+        cache: true
+        run-install: true
+
+    - name: Format, lint & typecheck
+      run: vp check
+
+    - name: Build
+      run: vp run build
+      env:
+        GITHUB_PAGES: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && 'true' || '' }}
+
+    - name: Upload build artifact
+      if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+      uses: actions/upload-artifact@v7
+      with:
+        name: dashboard-dist
+        path: sources/dashboard/dist
+        retention-days: 7
+
+  deploy:
+    name: Deploy to GitHub Pages
+    needs: check-and-build
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    concurrency:
+      group: pages
+      cancel-in-progress: false
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: dashboard-dist
+          path: dist
+
+      - uses: actions/configure-pages@v6
+
+      - uses: actions/upload-pages-artifact@v5
+        with:
+          path: dist
+
+      - id: deployment
+        uses: actions/deploy-pages@v5
