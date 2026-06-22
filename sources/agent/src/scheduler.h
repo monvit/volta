@@ -21,7 +21,8 @@ namespace agent {
 class Scheduler {
  public:
   explicit Scheduler(const config::Config& config,
-                     std::vector<collectors::Collector*>&& collectors);
+                     std::vector<collectors::Collector*>&& collectors,
+                     std::shared_ptr<MetricsBuffer> buffer);
 
   void Run();
 
@@ -31,7 +32,7 @@ class Scheduler {
 
   std::vector<collectors::Collector*> collectors_;
   const config::Config& config_;
-  MetricsBuffer buffer_;
+  std::shared_ptr<MetricsBuffer> buffer_;
   MessageQueue ms_queue_;
   Exporter exporter_;
 };

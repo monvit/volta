@@ -1,6 +1,7 @@
 #include <iostream>
 #include <string>
 
+#include "client/volta_collector_client.h"
 #include "collectors/collector.h"
 #include "config/config.h"
 #include "config/config_loader.h"
@@ -63,13 +64,28 @@ int agent_mode() {
     auto active_collectors = collectors::CollectorRegistry::Instance().Resolve(
         config.requestedMetrics);
 
-    Scheduler scheduler(config, std::move(active_collectors));
+    std::shared_ptr<MetricsBuffer> buffer =
+        std::make_shared<MetricsBuffer>(config);
+    Scheduler scheduler(config, std::move(active_collectors), buffer);
+
+    std::jthread grpc_thread([&scheduler, &config, &buffer]() {
+      if (auto channel = client::Client::CreateChannel(
+              config.server_address + ":" +
+              std::to_string(config.server_port))) {
+        client::Client grpc_client(channel, config, buffer);
+        grpc_client.Connect();
+      } else {
+        std::cerr << "Failed to create gRPC channel, exiting" << std::endl;
+      }
+    });
+
     scheduler.Run();
 
   } catch (const std::exception& e) {
     std::cerr << "CRITICAL ERROR: " << e.what() << std::endl;
     return 1;
   }
+  std::cout << "Agent exited successfully" << std::endl;
   return 0;
 }
 

@@ -1,17 +1,16 @@
 #ifndef VOLTA_AGENT_SRC_COLLECTORS_NVML_COLLECTOR_H_
 #define VOLTA_AGENT_SRC_COLLECTORS_NVML_COLLECTOR_H_
 
-#include <nvml.h>
-
 #include <vector>
 
 #include "collectors/collector.h"
+#include "platform/nvml_loader.h"
 
 namespace volta {
 namespace agent {
 namespace collectors {
 
-class NvmlCollector : public RegisteredCollector<NvmlCollector> {
+class NvmlCollector final : public RegisteredCollector<NvmlCollector> {
  public:
   NvmlCollector();
   ~NvmlCollector() override;
@@ -29,7 +28,8 @@ class NvmlCollector : public RegisteredCollector<NvmlCollector> {
   std::vector<MetricType> requested_metrics_;
   std::optional<GpuID> gpu_id_;
 
-  nvmlDevice_t device_handle_;
+  const platform::NvmlApi* nvml_ = nullptr;
+  nvmlDevice_t device_handle_ = nullptr;
   bool initialized_ = false;
 };
 

@@ -11,10 +11,11 @@ namespace volta {
 namespace agent {
 
 Scheduler::Scheduler(const config::Config& config,
-                     std::vector<collectors::Collector*>&& collectors)
+                     std::vector<collectors::Collector*>&& collectors,
+                     std::shared_ptr<MetricsBuffer> buffer)
     : collectors_(std::move(collectors)),
       config_(config),
-      buffer_(config),
+      buffer_(buffer),
       exporter_(config),
       ms_queue_("/volta_agent_command_queue", MessageQueue::Role::Receiver,
                 {}) {}
@@ -23,7 +24,8 @@ void Scheduler::Run() {
   for (auto collector : collectors_) {
     collector->Init();
   }
-  std::cout << "[" << config_.uuid << "] Starting collection loop (Interval: "
+
+  std::cout << "Starting collection loop (Interval: "
             << config_.collection_interval.count() << "ms)..." << std::endl;
   ms_queue_.listen([this](std::string_view message) {
     if (message.starts_with("dump_start")) {
@@ -45,11 +47,11 @@ void Scheduler::Run() {
       // TODO: make the metrics collect into a preallocated tray
       //       instead of allocating new memory for each collection
       auto metrics = collector->Collect();
-      buffer_.AddMetrics(metrics);
+      buffer_->AddMetrics(metrics);
       exporter_.Dump(metrics);
     }
 
-    // PrintDashboard();
+    PrintDashboard();
 
     std::this_thread::sleep_for(config_.collection_interval);
   }
@@ -90,7 +92,7 @@ void Scheduler::PrintDashboard() {
             << "\n";
   std::cout << "-----------------------------------------------\n";
 
-  auto latest = buffer_.LatestSamples();
+  auto latest = buffer_->LatestSamples();
   for (const auto& [key, sample] : latest) {
     auto metric_name =
         MetricType_Name(static_cast<MetricType>(key.metric_type));
@@ -108,7 +110,8 @@ void Scheduler::PrintDashboard() {
   std::cout << "-----------------------------------------------\n";
   std::cout << "Data points collected: " << latest.size() << "\n";
   if (exporter_.IsActive()) std::cout << "Export in progress... \n";
-  std::cout << "# of metrics buffered: " << buffer_.CapacityPerSeries() << "\n";
+  std::cout << "# of metrics buffered: " << buffer_->CapacityPerSeries()
+            << "\n";
   std::cout << "Press Ctrl+C to exit."
             << "\n";
   std::cout.flush();

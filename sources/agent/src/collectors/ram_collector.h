@@ -7,7 +7,7 @@ namespace volta {
 namespace agent {
 namespace collectors {
 
-class RamCollector : public RegisteredCollector<RamCollector> {
+class RamCollector final : public RegisteredCollector<RamCollector> {
  public:
   bool Init() override;
   std::vector<Metric> Collect() override;

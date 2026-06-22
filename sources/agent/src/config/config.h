@@ -39,8 +39,8 @@ struct Config {
   static constexpr int32_t kDefaultIntervalMs = 500;
   static constexpr int32_t kDefaultTimeWindowMs = 2000;
   static constexpr char const* kDefaultServerAddress = "localhost";
-  static constexpr uint16_t kDefaultServerPort = 50051;
   static constexpr const char* kDefaultDumpPath = "/var/lib/volta/dumps";
+  static constexpr uint16_t kDefaultServerPort = 5000;
   static inline cpu_set_t kDefaultAffinity = [] {
     cpu_set_t mask;
     CPU_ZERO(&mask);
@@ -52,8 +52,6 @@ struct Config {
     }
     return mask;
   }();
-
-  std::string uuid = "";
 
   std::chrono::milliseconds collection_interval =
       std::chrono::milliseconds(kDefaultIntervalMs);

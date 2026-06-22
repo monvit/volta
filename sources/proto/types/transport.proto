@@ -1,0 +1,53 @@
+syntax = "proto3";
+
+package volta;
+
+import "google/protobuf/duration.proto";
+import "google/protobuf/timestamp.proto";
+
+option go_package = "github.com/monvit/volta/server/pb/types;types";
+
+message ControlMessage {
+  MessageType               type      = 1;
+  google.protobuf.Timestamp timestamp = 2;
+  oneof request {
+    // TODO: error levels
+    string          payload           = 3;
+    SendDataRequest send_data_request = 4;
+  };
+}
+
+enum MessageType {
+  MESSAGE_UNKNOWN     = 0;
+  MESSAGE_SEND_DATA   = 1;
+  MESSAGE_STREAM_DATA = 2;
+  MESSAGE_OK          = 3;
+  MESSAGE_ERROR       = 4;
+  MESSAGE_PING        = 5;
+  MESSAGE_PONG        = 6;
+  MESSAGE_ID          = 7;
+}
+
+message SendDataRequest {
+  oneof payload {
+    RangeDuration  range_duration   = 1;
+    RangeTime      range_time       = 2;
+    RangeCountFrom range_count_from = 3;
+    uint32         count            = 4;
+  }
+}
+
+message RangeDuration {
+  google.protobuf.Duration  duration = 1;
+  google.protobuf.Timestamp from     = 2;
+}
+
+message RangeTime {
+  google.protobuf.Timestamp from = 1;
+  google.protobuf.Timestamp to   = 2;
+}
+
+message RangeCountFrom {
+  uint64                    count = 1;
+  google.protobuf.Timestamp from  = 2;
+}

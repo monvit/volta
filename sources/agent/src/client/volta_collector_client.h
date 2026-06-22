@@ -1,0 +1,56 @@
+#ifndef VOLTA_AGENT_CLIENT_VOLTA_COLLECTOR_CLIENT_H_
+#define VOLTA_AGENT_CLIENT_VOLTA_COLLECTOR_CLIENT_H_
+
+#include <chrono>
+#include <filesystem>
+#include <memory>
+
+#include "config/config.h"
+#include "connect_reactor.h"
+#include "imessage_handler.h"
+#include "stream_metrics_reactor.h"
+#include "volta.grpc.pb.h"
+
+namespace volta {
+namespace agent {
+
+class MetricsBuffer;
+
+namespace client {
+
+class Client final : public IMessageHandler {
+ public:
+  Client(std::shared_ptr<grpc::Channel> channel, config::Config& config,
+         std::shared_ptr<::volta::agent::MetricsBuffer> buffer);
+  ~Client() override = default;
+
+  void Connect();
+  void OnMessage(
+      const ::volta::ControlMessage& msg) override;  // IMessageHandler
+
+  static std::shared_ptr<grpc::Channel> CreateChannel(
+      const std::string& address);
+
+ private:
+  void SendData();
+  void StreamData();
+
+  bool LoadUUID(std::string& out_uuid);
+  void SaveUUID(const std::string& uuid);
+
+  std::string id_ = "";
+  config::Config& config_;
+  std::shared_ptr<::volta::agent::MetricsBuffer> buffer_;
+
+  std::unique_ptr<::volta::VoltaCollector::Stub> stub_;
+  std::unique_ptr<ConnectReactor> connect_reactor_;
+  std::unique_ptr<StreamMetricsReactor> stream_data_reactor_;
+
+  static std::filesystem::path kUUIDFile;
+};
+
+}  // namespace client
+}  // namespace agent
+}  // namespace volta
+
+#endif  // VOLTA_AGENT_CLIENT_VOLTA_COLLECTOR_CLIENT_H_
