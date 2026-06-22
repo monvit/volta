@@ -22,19 +22,6 @@ import (
 // ── HTTP Server ───────────────────────────────────────────────────────────────
 
 type HTTPServer struct {
-<<<<<<< HEAD
-	registry *registry.AgentRegistry
-	router   *commandrouter.CommandRouter
-	hub      *hub.WSHub
-	mux      *chi.Mux
-}
-
-func NewHTTPServer(registry *registry.AgentRegistry, router *commandrouter.CommandRouter, hub *hub.WSHub) *HTTPServer {
-	s := &HTTPServer{
-		registry: registry,
-		router:   router,
-		hub:      hub,
-=======
 	registry       *registry.AgentRegistry
 	router         *commandrouter.CommandRouter
 	hub            *hub.WSHub
@@ -53,7 +40,6 @@ func NewHTTPServer(
 		router:         router,
 		hub:            hub,
 		allowedOrigins: allowedOrigins,
->>>>>>> devel
 	}
 	s.mux = s.routes()
 	return s
@@ -69,10 +55,7 @@ func (s *HTTPServer) routes() *chi.Mux {
 	mux.Use(middleware.RequestID)
 	mux.Use(middleware.RealIP)
 	mux.Use(middleware.Recoverer)
-<<<<<<< HEAD
-=======
 	mux.Use(corsMiddleware(s.allowedOrigins))
->>>>>>> devel
 	mux.Use(middleware.Timeout(30 * time.Second))
 
 	mux.Route("/api", func(r chi.Router) {
@@ -86,8 +69,6 @@ func (s *HTTPServer) routes() *chi.Mux {
 	return mux
 }
 
-<<<<<<< HEAD
-=======
 func corsMiddleware(allowedOrigins []string) func(http.Handler) http.Handler {
 	allowed := make(map[string]struct{}, len(allowedOrigins))
 	for _, origin := range allowedOrigins {
@@ -134,7 +115,6 @@ func corsMiddleware(allowedOrigins []string) func(http.Handler) http.Handler {
 	}
 }
 
->>>>>>> devel
 // ── Handlers ──────────────────────────────────────────────────────────────────
 
 // GET /api/agents
