@@ -25,15 +25,11 @@ class NvmlCollector final : public RegisteredCollector<NvmlCollector> {
   void SetRequestedMetrics(const std::vector<MetricType>& metrics) override;
 
  private:
-  struct DeviceInfo {
-    nvmlDevice_t handle;
-    GpuID id;
-  };
-
   std::vector<MetricType> requested_metrics_;
-  std::vector<DeviceInfo> devices_;
+  std::optional<GpuID> gpu_id_;
 
   const platform::NvmlApi* nvml_ = nullptr;
+  nvmlDevice_t device_handle_ = nullptr;
   bool initialized_ = false;
 };
 

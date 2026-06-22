@@ -34,9 +34,7 @@ std::vector<Metric> RamCollector::Collect() {
   uint64_t total = 0;
   ReadStats(used, total);
 
-  auto now = std::chrono::duration_cast<std::chrono::nanoseconds>(
-                 std::chrono::system_clock::now().time_since_epoch())
-                 .count();
+  auto now = std::chrono::system_clock::now().time_since_epoch().count();
   std::vector<Metric> metrics;
   if (needs_total) {
     metrics.push_back(
