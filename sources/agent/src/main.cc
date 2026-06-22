@@ -22,14 +22,8 @@ int main() {
   try {
     auto config = config::ConfigLoader::LoadConfig();
 
-    platform::PlatformDetector detector;
-    auto hw = detector.Detect();
-    detector.PrintDetectedInfo(hw);
-
     auto active_collectors = collectors::CollectorRegistry::Instance().Resolve(
         config.requestedMetrics);
-
-    std::cin.get();
 
     std::shared_ptr<MetricsBuffer> buffer =
         std::make_shared<MetricsBuffer>(config);
@@ -42,7 +36,10 @@ int main() {
         client::Client grpc_client(channel, config, buffer);
         grpc_client.Connect();
       } else {
-        std::cerr << "Failed to create gRPC channel, exiting" << std::endl;
+        std::cerr
+            << "Failed to create gRPC channel, falling back to local dashboard"
+            << std::endl;
+        scheduler.print_dashboard.store(true);
       }
     });
 
