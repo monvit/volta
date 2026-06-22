@@ -6,13 +6,20 @@
 #include <sstream>
 #include <thread>
 
+volatile sig_atomic_t g_running = 1;
+
 namespace volta {
 namespace agent {
 
 Scheduler::Scheduler(const config::Config& config,
                      std::vector<collectors::Collector*>&& collectors,
                      std::shared_ptr<MetricsBuffer> buffer)
-    : collectors_(std::move(collectors)), config_(config), buffer_(buffer) {}
+    : collectors_(std::move(collectors)),
+      config_(config),
+      buffer_(buffer),
+      exporter_(config),
+      ms_queue_("/volta_agent_command_queue", MessageQueue::Role::Receiver,
+                {}) {}
 
 void Scheduler::Run() {
   for (auto collector : collectors_) {
@@ -21,19 +28,36 @@ void Scheduler::Run() {
 
   std::cout << "Starting collection loop (Interval: "
             << config_.collection_interval.count() << "ms)..." << std::endl;
-
-  while (true) {
+  ms_queue_.listen([this](std::string_view message) {
+    if (message.starts_with("dump_start")) {
+      std::optional<std::string> path = std::nullopt;
+      if (message.size() > 11) {
+        int path_start = message.find(";");
+        message.remove_prefix(path_start + 1);
+        path = message;
+      }
+      std::cout << "path: " << *path << std::endl;
+      this->exporter_.StartDump(path);
+    }
+    if (message.starts_with("dump_end")) {
+      this->exporter_.EndDump();
+    }
+  });
+  while (g_running) {
     for (const auto& collector : collectors_) {
       // TODO: make the metrics collect into a preallocated tray
       //       instead of allocating new memory for each collection
       auto metrics = collector->Collect();
       buffer_->AddMetrics(metrics);
+      exporter_.Dump(metrics);
     }
 
     if (print_dashboard.load()) PrintDashboard();
 
     std::this_thread::sleep_for(config_.collection_interval);
   }
+  exporter_.EndDump();
+  ms_queue_.stop_listening();
 }
 
 std::string Scheduler::DescribeKey(const BufferKey& key) {
@@ -86,6 +110,7 @@ void Scheduler::PrintDashboard() {
 
   std::cout << "-----------------------------------------------\n";
   std::cout << "Data points collected: " << latest.size() << "\n";
+  if (exporter_.IsActive()) std::cout << "Export in progress... \n";
   std::cout << "# of metrics buffered: " << buffer_->CapacityPerSeries()
             << "\n";
   std::cout << "Press Ctrl+C to exit."
