@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type uPlot from "uplot";
-import { UplotReact } from "@/lib/uplot-react";
+import { UplotReact, chartTooltipPlugin } from "@/lib/uplot-react";
 import { useMeasuredWidth } from "@/hooks/use-measured-width";
 
 function readChartChromeColors() {
@@ -69,6 +69,8 @@ export function DetailedChart({
 
   const resetScales = useCallback(() => !zoomedRef.current, []);
 
+  const tooltipPlugin = useMemo(() => chartTooltipPlugin(formatValue), [formatValue]);
+
   const data = useMemo<uPlot.AlignedData>(
     () => [times.map((t) => t / 1000), values],
     [times, values],
@@ -79,6 +81,7 @@ export function DetailedChart({
       ({
         scales: { x: { time: true } },
         legend: { show: false },
+        plugins: [tooltipPlugin],
         hooks: {
           setSelect: [
             (u) => {
@@ -124,7 +127,7 @@ export function DetailedChart({
           },
         ],
       }) satisfies Omit<uPlot.Options, "width" | "height">,
-    [chartAxis, chartGrid, color, label, formatValue],
+    [chartAxis, chartGrid, color, label, formatValue, tooltipPlugin],
   );
 
   const options = useMemo<uPlot.Options>(

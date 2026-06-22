@@ -1,5 +1,6 @@
 #include "scheduler.h"
 
+#include <atomic>
 #include <iomanip>
 #include <iostream>
 #include <sstream>
@@ -51,7 +52,7 @@ void Scheduler::Run() {
       exporter_.Dump(metrics);
     }
 
-    PrintDashboard();
+    if (print_dashboard.load()) PrintDashboard();
 
     std::this_thread::sleep_for(config_.collection_interval);
   }
@@ -83,7 +84,7 @@ void Scheduler::PrintDashboard() {
   std::cout << "\033[2J\033[1;1H";
 
   std::cout << "===============================================\n";
-  std::cout << "    VOLTA AGENT v0.5 - ACTIVE MONITOR    \n";
+  std::cout << "    VOLTA AGENT - ACTIVE MONITOR    \n";
   std::cout << "===============================================\n";
 
   std::cout << std::left << std::setw(42) << "METRIC NAME" << std::setw(38)
