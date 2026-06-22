@@ -39,6 +39,7 @@ struct Config {
   static constexpr int32_t kDefaultIntervalMs = 500;
   static constexpr int32_t kDefaultTimeWindowMs = 2000;
   static constexpr char const* kDefaultServerAddress = "localhost";
+  static constexpr const char* kDefaultDumpPath = "/var/lib/volta/dumps";
   static constexpr uint16_t kDefaultServerPort = 5000;
   static inline cpu_set_t kDefaultAffinity = [] {
     cpu_set_t mask;
@@ -60,6 +61,7 @@ struct Config {
   std::vector<MetricType> requestedMetrics;
   std::chrono::milliseconds buffered_time_window =
       std::chrono::milliseconds(kDefaultTimeWindowMs);
+  std::filesystem::path dump_dir = kDefaultDumpPath;
 };
 
 }  // namespace config

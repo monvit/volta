@@ -1,8 +1,12 @@
 #include "connect_reactor.h"
 
+#include <chrono>
+#include <csignal>
 #include <iostream>
 
 #include "imessage_handler.h"
+
+extern volatile sig_atomic_t g_running;
 
 namespace volta {
 namespace agent {
@@ -61,7 +65,12 @@ void ConnectReactor::OnDone(const grpc::Status& status) {
 
 grpc::Status ConnectReactor::Await() {
   std::unique_lock<std::mutex> l(mu_);
-  cv_.wait(l, [this] { return done_; });
+  while (!done_) {
+    if (!g_running) {
+      context_.TryCancel();
+    }
+    cv_.wait_for(l, std::chrono::milliseconds(200), [this] { return done_; });
+  }
 
   return std::move(status_);
 }
