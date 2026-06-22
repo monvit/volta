@@ -43,7 +43,7 @@ int cli_mode(int argc, const char* argv[]) {
       return 0;
     }
 
-    if (subcommand == "end") {
+    if (subcommand == "stop") {
       msq.send("dump_end");
       std::cout << "Message dump_end sent" << std::endl;
       return 0;
