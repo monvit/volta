@@ -151,6 +151,14 @@ void Client::StreamData() {
     return;
   }
 
+  if (stream_data_reactor_ != nullptr) {
+    std::cerr << "StreamData RPC already active, refusing to start another"
+              << std::endl;
+    connect_reactor_->EnqueueWrite(connect_reactor_->CreateMessage(
+        ::volta::MessageType::MESSAGE_ERROR, "StreamData RPC already active"));
+    return;
+  }
+
   stream_data_reactor_ = std::make_unique<StreamMetricsReactor>(
       stub_.get(), id_, buffer_, [this](const grpc::Status& status) {
         if (!status.ok()) {
