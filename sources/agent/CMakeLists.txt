@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.16)
 
-project(volta_agent LANGUAGES CXX)
+project(volta LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -53,24 +53,24 @@ target_link_libraries(volta_proto PUBLIC
 )
 
 # --- Agent executable ---
-add_executable(volta_agent)
+add_executable(volta)
 
-target_compile_options(volta_agent PRIVATE -std=c++20)
+target_compile_options(volta PRIVATE -std=c++20)
 
 if(CMAKE_BUILD_TYPE STREQUAL "Debug")
     message(STATUS "Debug build - adding DEBUG macro")
-    target_compile_definitions(volta_agent PRIVATE DEBUG)
+    target_compile_definitions(volta PRIVATE DEBUG)
 endif()
 
 file(GLOB_RECURSE AGENT_SOURCES CONFIGURE_DEPENDS "src/*.cc")
-target_sources(volta_agent PRIVATE ${AGENT_SOURCES})
+target_sources(volta PRIVATE ${AGENT_SOURCES})
 
-target_include_directories(volta_agent PRIVATE
+target_include_directories(volta PRIVATE
     src
     ${CMAKE_SOURCE_DIR}/libs/include/nvidia
 )
 
-target_link_libraries(volta_agent PRIVATE
+target_link_libraries(volta PRIVATE
     volta_proto
     Threads::Threads
     fmt::fmt
@@ -90,17 +90,17 @@ find_library(NVML_LIBRARY NAMES nvidia-ml nvml
 
 if(NVML_INCLUDE_DIR AND NVML_LIBRARY)
     message(STATUS "Found NVML: ${NVML_LIBRARY}")
-    target_include_directories(volta_agent PRIVATE ${NVML_INCLUDE_DIR})
-    target_link_libraries(volta_agent PRIVATE ${NVML_LIBRARY})
+    target_include_directories(volta PRIVATE ${NVML_INCLUDE_DIR})
+    target_link_libraries(volta PRIVATE ${NVML_LIBRARY})
 else()
     message(STATUS "NVML not found - using stub")
     add_library(nvml_stub STATIC ${CMAKE_SOURCE_DIR}/libs/stubs/nvml_stub.cc)
     target_include_directories(nvml_stub PRIVATE ${CMAKE_SOURCE_DIR}/libs/include/nvidia)
-    target_link_libraries(volta_agent PRIVATE nvml_stub)
-    target_include_directories(volta_agent PRIVATE ${CMAKE_SOURCE_DIR}/libs/include/nvidia)
+    target_link_libraries(volta PRIVATE nvml_stub)
+    target_include_directories(volta PRIVATE ${CMAKE_SOURCE_DIR}/libs/include/nvidia)
 endif()
 
-target_compile_definitions(volta_agent PRIVATE HAVE_NVML)
+target_compile_definitions(volta PRIVATE HAVE_NVML)
 
 # --- Config file ---
 if(NOT EXISTS ${CMAKE_SOURCE_DIR}/agent.conf)
@@ -115,13 +115,22 @@ if(NOT EXISTS ${CMAKE_SOURCE_DIR}/agent.conf)
     endif()
 else()
     add_custom_command(
-        TARGET volta_agent POST_BUILD
+        TARGET volta POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy_if_different
             ${CMAKE_SOURCE_DIR}/agent.conf
             ${CMAKE_CURRENT_BINARY_DIR}/agent.conf
         COMMENT "Copying agent.conf..."
     )
 endif()
+
+add_custom_command(
+    TARGET volta POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E rm -f $<TARGET_FILE_DIR:volta>/voltad
+    COMMAND ${CMAKE_COMMAND} -E create_hardlink
+        $<TARGET_FILE:volta>
+        $<TARGET_FILE_DIR:volta>/voltad
+    COMMENT "Creating hardlink voltad..."
+)
 
 # --- Formatting ---
 find_program(CLANG_FORMAT_EXE clang-format)

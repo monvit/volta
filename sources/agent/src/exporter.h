@@ -11,7 +11,7 @@ namespace agent {
 
 class Exporter {
  public:
-  Exporter(const config::Config& cfg);
+  explicit Exporter(const config::Config& cfg);
   void Dump(const std::vector<Metric>& metric);
   void StartDump(std::optional<std::filesystem::path> dump_dir_overload);
   void EndDump();

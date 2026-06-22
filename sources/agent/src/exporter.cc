@@ -6,36 +6,38 @@ namespace volta {
 namespace agent {
 
 Exporter::Exporter(const config::Config& cfg) : dump_file_() {
-  if(std::filesystem::exists(cfg.dump_dir)) {
+  if (std::filesystem::exists(cfg.dump_dir)) {
     dump_dir_ = cfg.dump_dir;
   }
 }
 
-void Exporter::Dump(const std::vector<Metric> &metrics) {
+void Exporter::Dump(const std::vector<Metric>& metrics) {
   if (!IsActive()) {
     return;
   }
 
-  for(auto metric : metrics)
+  for (auto metric : metrics)
     dump_file_ << MetricType_Name(metric.type) << ";" << DescribeDevice(metric)
-               << ";" << metric.timestamp << ";" << metric.value;
+               << ";" << metric.timestamp << ";" << metric.value << "\n";
 }
 
-void Exporter::StartDump(std::optional<std::filesystem::path> dump_dir_overload){
-  if(is_exporting) return;
-  
-  auto dir = dump_dir_overload.has_value() ? *dump_dir_overload : dump_dir_;
-  if(!std::filesystem::exists(dir)) return;
+void Exporter::StartDump(
+    std::optional<std::filesystem::path> dump_dir_overload) {
+  if (is_exporting) return;
 
-  dump_file_.open(dir.string() + std::format("/dump_{}.csv", std::chrono::system_clock::now()),
+  auto dir = dump_dir_overload.has_value() ? *dump_dir_overload : dump_dir_;
+  if (!std::filesystem::exists(dir)) return;
+
+  dump_file_.open(dir.string() + std::format("/dump_{}.csv",
+                                             std::chrono::system_clock::now()),
                   std::ios_base::out | std::ios_base::trunc);
 
-  dump_file_ << "metric_type;device_id;timestamp;value";
+  dump_file_ << "metric_type;device_id;timestamp;value\n";
   is_exporting = true;
 }
 
-void Exporter::EndDump(){
-  if(dump_file_.is_open()) dump_file_.close();
+void Exporter::EndDump() {
+  if (dump_file_.is_open()) dump_file_.close();
   is_exporting = false;
 }
 
