@@ -7,7 +7,8 @@
 #include <stdexcept>
 #include <string>
 
-MessageQueue::MessageQueue(const std::string& name, Role role, Options opts)
+MessageQueue::MessageQueue(const std::string& name, Role role,
+                           const Options& opts)
     : name_(name), role_(role), opts_(opts) {
   if (name.empty() || name[0] != '/')
     throw std::invalid_argument("Queue name must start with '/'");

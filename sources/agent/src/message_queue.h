@@ -17,7 +17,7 @@ class MessageQueue {
     int permissions = 0660;
   };
 
-  MessageQueue(const std::string& name, Role role, Options opts);
+  MessageQueue(const std::string& name, Role role, const Options& opts);
   ~MessageQueue();
 
   MessageQueue(const MessageQueue&) = delete;
