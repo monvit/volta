@@ -23,7 +23,7 @@ For the full architecture, deployment models (local vs. remote) and the metric c
 
 - **Agent** — @FW-Nagorko
 - **Server** — @kox13
-- **Dashboard** - @patryk-przybysz
+- **Dashboard** — @patryk-przybysz
 
 ## Development Setup
 
@@ -31,7 +31,6 @@ For the full architecture, deployment models (local vs. remote) and the metric c
 
 - **Git**
 - **Make**
-- **protoc** (Protocol Buffers compiler) + Go protoc plugins, required to (re)generate the gRPC code shared by Agent and Server
 - Component-specific toolchains — see [`sources/agent/README.md`](sources/agent/README.md), [`sources/server/README.md`](sources/server/README.md) and [`sources/dashboard/README.md`](sources/dashboard/README.md)
 
 ### 2. Clone the Repository
@@ -41,23 +40,15 @@ git clone https://github.com/monvit/volta.git
 cd volta
 ```
 
-### 3. Generate Protobuf Code
+### 3. Run a Component
 
-The gRPC/protobuf bindings consumed by the server (`sources/server/pb`) are generated from `sources/proto` and are **not committed** to the repository.
+Follow the dedicated setup steps in respective READMEs.
 
-```bash
-go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
-go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@latest
+- [Agent](/sources/agent/README.md)
+- [Server](/sources/server/README.md)
+- [Dashboard](/sources/dashboard/README.md)
 
-cd sources/server
-make proto
-```
-
-### 4. Run a Component
-
-For the Agent and Dashboard, follow the dedicated setup steps in their respective READMEs.
-
-### 5. Git Hooks (Optional)
+### 4. Git Hooks (Optional)
 
 ```bash
 make hooks
