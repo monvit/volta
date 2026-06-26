@@ -1,0 +1,22 @@
+syntax = "proto3";
+
+package volta;
+
+import "google/protobuf/timestamp.proto";
+import "google/protobuf/duration.proto";
+import "google/protobuf/empty.proto";
+
+import "types/transport.proto";
+import "types/metric.proto";
+
+option go_package = "github.com/monvit/volta/server/pb;pb";
+
+// Unary calls over persistent channel
+service VoltaCollector {
+  // Bidirectional streaming RPC that remains open for the lifetime of the connection.
+  // Exchanges control messages between the server and the agent.
+  // Primarily used for pings and server requests that instruct the agent to send data.
+  rpc Connect(stream ControlMessage) returns (stream ControlMessage);
+
+  rpc StreamMetrics(stream MetricBatch) returns (stream BatchAck);
+}

@@ -1,0 +1,66 @@
+name: Agent CI
+
+on:
+  push:
+    branches: [ "main", "devel" ]
+    paths:
+      - 'sources/agent/**'
+      - '.github/workflows/agent_ci.yml'
+  pull_request:
+    branches: [ "main", "devel" ]
+    paths:
+      - 'sources/agent/**'
+      - '.github/workflows/agent_ci.yml'
+
+jobs:
+  build-and-test:
+    name: Build & Format Check
+    runs-on: ubuntu-latest
+
+    env:
+      VCPKG_BINARY_SOURCES: "clear;x-gha,readwrite"
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Setup C++ tools
+      uses: aminya/setup-cpp@v1
+      with:
+        clang-format: true
+        cppcheck: true
+
+    - name: Cache vcpkg
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.cache/vcpkg
+          sources/agent/build/vcpkg_installed
+        key: vcpkg-${{ runner.os }}-${{ hashFiles('sources/agent/vcpkg.json') }}
+
+    - name: Setup vcpkg
+      uses: lukka/run-vcpkg@v11
+      with:
+        vcpkgJsonGlob: 'sources/agent/vcpkg.json'
+
+    - name: Check Code Formatting
+      run: |
+        find sources/agent/src -name "*.cc" -o -name "*.h" | xargs clang-format --dry-run --Werror -style=Google
+
+    - name: CMake Configure
+      working-directory: sources/agent
+      run: cmake --preset default -DCMAKE_BUILD_TYPE=Release
+
+    - name: Build
+      working-directory: sources/agent
+      run: cmake --build --preset default -j$(nproc)
+
+    - name: Analyze Logic
+      run: |
+        cppcheck --enable=warning,performance,portability \
+        --error-exitcode=1 \
+        --suppress=missingIncludeSystem \
+        --inline-suppr \
+        --force \
+        -i sources/agent/build \
+        -i sources/agent/gen \
+        sources/agent

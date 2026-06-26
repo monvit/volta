@@ -1,3 +1,16 @@
+# --- Shared ---
 .vscode/
-build/
-cmake-build-*/
+*.code-workspace
+sources/**/logs
+
+# --- Agent ---
+.cache/
+compile_commands.json
+sources/agent/agent.conf
+.clang-format
+*.uuid
+out/
+
+# --- Server ---
+sources/server/pb/
+sources/server/server

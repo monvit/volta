@@ -1,0 +1,35 @@
+#!/bin/bash
+
+REPO_ROOT=$(git rev-parse --show-toplevel)
+BUILD_DIR="$REPO_ROOT/sources/agent/build"
+
+STAGED_CPP=$(git diff --cached --name-only --diff-filter=ACM | grep -E '^sources/agent/.*\.(cc|h)$')
+STAGED_GO_SERVER=$(git diff --cached --name-only --diff-filter=ACM | grep -E '^sources/server/.*\.go$')
+
+if [ -z "$STAGED_CPP" ] && [ -z "$STAGED_GO_SERVER" ]; then
+    exit 0
+fi
+
+if [ -n "$STAGED_CPP" ]; then
+    if [ ! -d "$BUILD_DIR" ]; then
+        echo "Build directory not found: $BUILD_DIR"
+        echo "Run cmake --preset debug in sources/agent first."
+        exit 1
+    fi
+
+    cmake --build "$BUILD_DIR" --target check-format
+    if [ $? -ne 0 ]; then
+        echo "Formatting errors found. Run 'cmake --build $BUILD_DIR --target format' to fix."
+        exit 1
+    fi
+fi
+
+if [ -n "$STAGED_GO_SERVER" ]; then
+    UNFORMATTED=$(gofmt -l $STAGED_GO_SERVER)
+    if [ -n "$UNFORMATTED" ]; then
+        echo "Go formatting errors found in server files:"
+        echo "$UNFORMATTED"
+        echo "Run 'gofmt -w <file>' to fix."
+        exit 1
+    fi
+fi

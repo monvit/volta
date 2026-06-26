@@ -1,0 +1,17 @@
+[[language]]
+name = "c"
+scope = "source.c"
+file-types = []
+
+[[language]]
+name = "cpp"
+scope = "source.cpp"
+file-types = ["cc", "hh", "c++", "cpp", "hpp", "h", "ipp", "tpp", "cxx", "hxx", "ixx", "txx", "ino", "C", "H", "cu", "cuh"]
+language-servers = ["clangd"]
+
+[language-server.clangd]
+command = "clangd"
+args = [
+  "--header-insertion=never",
+  "--compile-commands-dir=build"
+]
