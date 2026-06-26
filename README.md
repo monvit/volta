@@ -1,57 +1,63 @@
-# volta
+# Volta
 
+Volta is a lightweight, energy-aware monitoring platform for tracking system and hardware metrics in real time.
+
+It follows a classic **Agent → Server → Dashboard** model:
+
+- One or more **Agents** (C++) run on monitored machines, sample low-level hardware/system metrics and stream them to a single configured server over **gRPC**.
+- The **Server** (Go) aggregates metrics from all connected agents and exposes them to clients over **WebSockets**.
+- The **Dashboard** (React) visualises live and historical metrics served by the Server.
+For the full architecture, deployment models (local vs. remote) and the metric catalogue, see [docs/pl/ARCHITECTURE.md](docs/pl/ARCHITECTURE.md) and [docs/pl/METRICS.md](docs/pl/METRICS.md).
+
+## Repository Structure
+
+| Path | Component | Stack | Description |
+|---|---|---|---|
+| [`sources/agent`](sources/agent) | Agent | C++20, CMake, vcpkg | Collects CPU/GPU power and standard system metrics; streams them to the server. |
+| [`sources/server`](sources/server) | Server | Go | Central aggregation point; gRPC ingest, REST + WebSocket API for the dashboard. |
+| [`sources/dashboard`](sources/dashboard) | Dashboard | TypeScript, React, Vite | Web UI for visualising live and historical agent metrics. |
+| [`sources/proto`](sources/proto) | Proto | Protocol Buffers | Shared gRPC contract between Agent and Server. |
+| [`docs`](docs) | Docs | Markdown | Architecture, metrics and other supporting documentation. |
+
+## Maintainers
+
+- **Agent** — @FW-Nagorko
+- **Server** — @kox13
+- **Dashboard** — @patryk-przybysz
 
 ## Development Setup
 
-Project is using CMake as build system and vcpkg in Manifest Mode for dependency management.
-
 ### 1. Initial Requirements
 
-- **Linux** (Kernel 5.x.+)
-- **C++20 Compiler** (GCC 11+/Clang 14+)
-- **CMake** (3.16+)
 - **Git**
+- **Make**
+- Component-specific toolchains — see [`sources/agent/README.md`](sources/agent/README.md), [`sources/server/README.md`](sources/server/README.md) and [`sources/dashboard/README.md`](sources/dashboard/README.md)
 
-### 2. Vcpkg Installation
-
-```bash
-# Clone vcpkg repository
-git clone https://github.com/microsoft/vcpkg.git ~/vcpkg
-
-# Run bootstraping script
-~/vcpkg/bootstrap-vcpkg.sh
-
-# (Optional) Set VCPKG_ROOT environment variable in .bashrc (or other rc)
-# Otherway you will need to enter the path for every single build.
-export VCPKG_ROOT=~/vcpkg
-```
-
-### 3. Build Project
+### 2. Clone the Repository
 
 ```bash
-# Configurate the project, compile dependencies.
-# If VCPKG_ROOT was not set, point toolchain yourself using
-# -DCMAKE_TOOLCHAIN_FILE=~/vcpkg/scripts/buildsystems/vcpkg.cmake
-cmake -B build -S . 
-
-# Compilation
-cmake --build build
+git clone https://github.com/monvit/volta.git
+cd volta
 ```
 
-### 4. Run Agent
+### 3. Run a Component
+
+Follow the dedicated setup steps in respective READMEs.
+
+- [Agent](/sources/agent/README.md)
+- [Server](/sources/server/README.md)
+- [Dashboard](/sources/dashboard/README.md)
+
+### 4. Git Hooks (Optional)
 
 ```bash
-# May require root/admin privileges to access RAPL/Affinity features.
-./build/source/agent/volta_agent
+make hooks
 ```
 
-### FAQ 
-**Q: Do I have to enter `vcpkg install`?**
-**A:** No, project is working in Manifest Mode. CMake automatically reads the `vcpkg.json` file and installs whats needed in isolated environment inside build directory.
+## Continuous Integration
 
-**Q: I changed `vcpkg.json`, but build see no difference.**
-**A:** Clean up CMake cache, and build project once again:
-```bash
-rm -rf build
-cmake -B build -S .
-```
+Each component is linted, built and tested independently and only on relevant changes — see [`.github/workflows`](.github/workflows) (`agent_ci.yml`, `server_ci.yml`, `dashboard_ci.yml`).
+
+## License
+
+Volta is licensed under the [Apache License 2.0](LICENSE).
