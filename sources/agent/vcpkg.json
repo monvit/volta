@@ -5,6 +5,7 @@
   "dependencies": [
     "fmt",
     "grpc",
+    "gtest",
     "protobuf",
     "tomlplusplus"
   ]

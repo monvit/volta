@@ -51,6 +51,7 @@ void SeriesBuffer::SetCapacity(size_t capacity) {
   samples_.reserve(capacity_);
   samples_.resize(capacity_);
   head_ = 0;
+  tail_ = 0;
 }
 
 void SeriesBuffer::Push(const Sample& sample) {
