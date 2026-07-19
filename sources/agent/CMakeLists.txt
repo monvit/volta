@@ -73,25 +73,26 @@ target_link_libraries(volta_proto PUBLIC
     gRPC::grpc++_reflection
 )
 
-# --- Agent executable ---
-add_executable(volta)
+# --- Agent library (shared by volta and volta_tests) ---
+file(GLOB_RECURSE AGENT_LIB_SOURCES CONFIGURE_DEPENDS "src/*.cc")
+list(FILTER AGENT_LIB_SOURCES EXCLUDE REGEX ".*/main\\.cc$")
 
-target_compile_options(volta PRIVATE -std=c++20)
+add_library(volta_lib STATIC)
+target_sources(volta_lib PRIVATE ${AGENT_LIB_SOURCES})
+
+target_compile_options(volta_lib PRIVATE -std=c++20)
 
 if(CMAKE_BUILD_TYPE STREQUAL "Debug")
     message(STATUS "Debug build - adding DEBUG macro")
-    target_compile_definitions(volta PRIVATE DEBUG)
+    target_compile_definitions(volta_lib PUBLIC DEBUG)
 endif()
 
-file(GLOB_RECURSE AGENT_SOURCES CONFIGURE_DEPENDS "src/*.cc")
-target_sources(volta PRIVATE ${AGENT_SOURCES})
-
-target_include_directories(volta PRIVATE
+target_include_directories(volta_lib PUBLIC
     src
     ${CMAKE_SOURCE_DIR}/libs/include/nvidia
 )
 
-target_link_libraries(volta PRIVATE
+target_link_libraries(volta_lib PUBLIC
     volta_proto
     Threads::Threads
     fmt::fmt
@@ -99,7 +100,11 @@ target_link_libraries(volta PRIVATE
     ${CMAKE_DL_LIBS}
 )
 
-target_compile_definitions(volta PRIVATE NVML_NO_UNVERSIONED_FUNC_DEFS)
+target_compile_definitions(volta_lib PUBLIC NVML_NO_UNVERSIONED_FUNC_DEFS)
+
+# --- Agent executable ---
+add_executable(volta src/main.cc)
+target_link_libraries(volta PRIVATE volta_lib)
 
 # --- Config file ---
 if(NOT EXISTS ${CMAKE_SOURCE_DIR}/agent.conf)
@@ -131,18 +136,36 @@ add_custom_command(
     COMMENT "Creating hardlink voltad..."
 )
 
+# --- Unit tests ---
+include(CTest)
+if(BUILD_TESTING)
+    find_package(GTest CONFIG REQUIRED)
+
+    add_executable(volta_tests)
+    target_sources(volta_tests PRIVATE
+        tests/series_buffer_test.cc
+    )
+    target_link_libraries(volta_tests PRIVATE
+        volta_lib
+        GTest::gtest_main
+    )
+
+    include(GoogleTest)
+    gtest_discover_tests(volta_tests)
+endif()
+
 # --- Formatting ---
 find_program(CLANG_FORMAT_EXE clang-format)
 
 if(CLANG_FORMAT_EXE)
     add_custom_target(format
-        COMMAND find src -name "*.cc" -o -name "*.h" | xargs ${CLANG_FORMAT_EXE} -i -style=Google
+        COMMAND find src tests -name "*.cc" -o -name "*.h" | xargs ${CLANG_FORMAT_EXE} -i -style=Google
         WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
         COMMENT "Running clang-format on agent sources..."
         VERBATIM
     )
     add_custom_target(check-format
-        COMMAND find src -name "*.cc" -o -name "*.h" | xargs ${CLANG_FORMAT_EXE} --dry-run --Werror -style=Google
+        COMMAND find src tests -name "*.cc" -o -name "*.h" | xargs ${CLANG_FORMAT_EXE} --dry-run --Werror -style=Google
         WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
         COMMENT "Checking agent source formatting..."
         VERBATIM

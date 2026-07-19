@@ -37,7 +37,21 @@ cmake -B build -S . --preset default
 cmake --build build
 ```
 
-### 4. Run Agent
+### 4. Run Tests
+
+Tests build by default (`BUILD_TESTING=ON`). After a successful build:
+
+```bash
+# Run the discovered GoogleTest suite via CTest
+ctest --test-dir build --output-on-failure
+
+# Or run the test binary directly
+./build/volta_tests
+```
+
+To configure without tests: `cmake -B build -S . --preset default -DBUILD_TESTING=OFF`.
+
+### 5. Run Agent
 
 ```bash
 # May require root/admin privileges to access RAPL/Affinity features.

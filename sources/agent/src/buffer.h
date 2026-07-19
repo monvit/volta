@@ -74,8 +74,8 @@ class SeriesBuffer {
 
   void SetCapacity(size_t capacity);
   size_t Capacity() const { return capacity_; }
-  size_t Size() const { return samples_.size(); }
-  bool Empty() const { return samples_.empty(); }
+  size_t Size() const { return head_ - tail_; }
+  bool Empty() const { return Size() == 0; }
   size_t GetHead() const { return head_; }
   size_t GetTail() const { return tail_; }
 

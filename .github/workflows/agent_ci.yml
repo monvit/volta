@@ -44,7 +44,7 @@ jobs:
 
     - name: Check Code Formatting
       run: |
-        find sources/agent/src -name "*.cc" -o -name "*.h" | xargs clang-format --dry-run --Werror -style=Google
+        find sources/agent/src sources/agent/tests -name "*.cc" -o -name "*.h" | xargs clang-format --dry-run --Werror -style=Google
 
     - name: CMake Configure
       working-directory: sources/agent
@@ -54,6 +54,10 @@ jobs:
       working-directory: sources/agent
       run: cmake --build --preset default -j$(nproc)
 
+    - name: Test
+      working-directory: sources/agent/build
+      run: ctest --output-on-failure
+
     - name: Analyze Logic
       run: |
         cppcheck --enable=warning,performance,portability \
@@ -61,6 +65,7 @@ jobs:
         --suppress=missingIncludeSystem \
         --inline-suppr \
         --force \
+        --library=googletest \
         -i sources/agent/build \
         -i sources/agent/gen \
         sources/agent
