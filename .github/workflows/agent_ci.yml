@@ -65,6 +65,7 @@ jobs:
         --suppress=missingIncludeSystem \
         --inline-suppr \
         --force \
+        --library=googletest \
         -i sources/agent/build \
         -i sources/agent/gen \
         sources/agent
