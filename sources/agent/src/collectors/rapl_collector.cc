@@ -1,56 +1,152 @@
 #include "rapl_collector.h"
 
-#include <fcntl.h>
+#include <dirent.h>
 #include <unistd.h>
 
 #include <algorithm>
+#include <cctype>
 #include <chrono>
-#include <cmath>
-#include <filesystem>
+#include <cstring>
+#include <fstream>
+#include <limits>
 
 namespace volta {
 namespace agent {
 namespace collectors {
 
-RaplCollector::RaplCollector() = default;
+namespace {
 
-bool RaplCollector::Init() {
+constexpr const char* kPowercapRoot = "/sys/class/powercap";
+
+bool StartsWith(const std::string& s, const char* prefix) {
+  const size_t n = std::strlen(prefix);
+  return s.size() >= n && s.compare(0, n, prefix) == 0;
+}
+
+}  // namespace
+
+bool RaplCollector::IsPackageName(const std::string& name) {
+  if (name == "package") return true;
+  if (!StartsWith(name, "package-")) return false;
+  const char* p = name.c_str() + 8;
+  if (*p == '\0') return false;
+  while (*p) {
+    if (!std::isdigit(static_cast<unsigned char>(*p))) return false;
+    ++p;
+  }
+  return true;
+}
+
+std::optional<int> RaplCollector::ParseSocketIndex(const std::string& name) {
+  if (name == "package") return 0;
+  if (!StartsWith(name, "package-")) return std::nullopt;
   try {
-    OpenMSR();
-    uint64_t readout = ReadMSR(0, MSR_RAPL::POWER_UNIT);
-    power_units_ = pow(0.5, (double)(readout & 0xf));
-    energy_units_ = pow(0.5, (double)((readout >> 8) & 0x1f));
-    time_units_ = pow(0.5, (double)((readout >> 16) & 0xf));
-    readout = ReadMSR(0, MSR_RAPL::PKG::ENERGY_STATUS);
-    last_value = energy_units_ * readout;
-    initialized_ = true;
-    return true;
-  } catch (const MSR_Open_Exception&) {
-    return false;
-  } catch (const MSR_Read_Exception&) {
-    return false;
+    return std::stoi(name.substr(8));
+  } catch (...) {
+    return std::nullopt;
   }
 }
 
+uint64_t RaplCollector::DeltaEnergyUj(uint64_t now, uint64_t last,
+                                      uint64_t max_range_uj) {
+  if (now >= last) return now - last;
+  if (max_range_uj > 0 && last <= max_range_uj) {
+    return (max_range_uj - last) + now;
+  }
+  return (std::numeric_limits<uint64_t>::max() - last) + now + 1;
+}
+
+bool RaplCollector::ReadU64File(const std::string& path, uint64_t* out) const {
+  std::ifstream in(path);
+  if (!in) return false;
+  uint64_t v = 0;
+  in >> v;
+  if (!in && !in.eof()) return false;
+  *out = v;
+  return true;
+}
+
+bool RaplCollector::ReadNameFile(const std::string& path,
+                                 std::string* out) const {
+  std::ifstream in(path);
+  if (!in) return false;
+  std::string line;
+  if (!std::getline(in, line)) return false;
+  while (!line.empty() &&
+         (line.back() == '\n' || line.back() == '\r' || line.back() == ' ')) {
+    line.pop_back();
+  }
+  *out = line;
+  return true;
+}
+
+std::vector<RaplCollector::PackageZone> RaplCollector::DiscoverPackages()
+    const {
+  std::vector<PackageZone> packages;
+  DIR* d = opendir(kPowercapRoot);
+  if (!d) return packages;
+
+  while (dirent* ent = readdir(d)) {
+    if (ent->d_name[0] == '.') continue;
+    const std::string zone_dir = std::string(kPowercapRoot) + "/" + ent->d_name;
+    const std::string name_path = zone_dir + "/name";
+    const std::string energy_path = zone_dir + "/energy_uj";
+
+    if (access(energy_path.c_str(), F_OK) != 0) continue;
+
+    std::string name;
+    if (!ReadNameFile(name_path, &name)) continue;
+    if (!IsPackageName(name)) continue;
+
+    PackageZone z;
+    z.path = zone_dir;
+    z.name = name;
+    auto sock = ParseSocketIndex(name);
+    z.socket_index = sock.value_or(-1);
+    uint64_t max_range = 0;
+    (void)ReadU64File(zone_dir + "/max_energy_range_uj", &max_range);
+    z.max_energy_range_uj = max_range;
+    packages.push_back(std::move(z));
+  }
+  closedir(d);
+
+  std::sort(packages.begin(), packages.end(),
+            [](const PackageZone& a, const PackageZone& b) {
+              if (a.socket_index != b.socket_index)
+                return a.socket_index < b.socket_index;
+              return a.name < b.name;
+            });
+  return packages;
+}
+
 bool RaplCollector::IsSupported() {
-  const std::filesystem::path cpu_base = "/dev/cpu";
-  std::error_code ec;
-  if (!std::filesystem::exists(cpu_base, ec) ||
-      !std::filesystem::is_directory(cpu_base, ec)) {
-    return false;
+  const auto packages = DiscoverPackages();
+  for (const auto& p : packages) {
+    if (access((p.path + "/energy_uj").c_str(), R_OK) == 0) return true;
   }
-
-  for (const auto& entry : std::filesystem::directory_iterator(cpu_base)) {
-    if (!entry.is_directory()) continue;
-
-    const auto msr_path = entry.path() / "msr";
-    if (std::filesystem::exists(msr_path, ec) &&
-        access(msr_path.c_str(), R_OK) == 0) {
-      return true;
-    }
-  }
-
   return false;
+}
+
+bool RaplCollector::Init() {
+  initialized_ = false;
+  auto packages = DiscoverPackages();
+  if (packages.empty()) return false;
+
+  auto it =
+      std::find_if(packages.begin(), packages.end(),
+                   [](const PackageZone& z) { return z.socket_index == 0; });
+  if (it == packages.end()) {
+    it = packages.begin();
+    it->socket_index = 0;
+  }
+
+  uint64_t energy = 0;
+  if (!ReadU64File(it->path + "/energy_uj", &energy)) return false;
+
+  active_ = *it;
+  last_energy_uj_ = energy;
+  initialized_ = true;
+  return true;
 }
 
 void RaplCollector::SetRequestedMetrics(
@@ -66,75 +162,26 @@ std::vector<Metric> RaplCollector::Collect() {
     return {};
   }
 
-  uint64_t readout;
-  try {
-    readout = ReadMSR(0, MSR_RAPL::PKG::ENERGY_STATUS);
-  } catch (const MSR_Read_Exception&) {
-    return {};
-  }
+  uint64_t energy = 0;
+  if (!ReadU64File(active_.path + "/energy_uj", &energy)) return {};
 
-  double value = energy_units_ * readout;
+  const uint64_t delta_uj =
+      DeltaEnergyUj(energy, last_energy_uj_, active_.max_energy_range_uj);
+  last_energy_uj_ = energy;
+
   Metric m;
   m.type = MetricType::METRIC_TYPE_CPU_POWER_PACKAGE;
   CpuID cpu_id;
-  cpu_id.set_socket_index(0);
+  cpu_id.set_socket_index(active_.socket_index >= 0 ? active_.socket_index : 0);
   cpu_id.set_core_index(0);
   m.devId = DeviceId{std::move(cpu_id)};
-  m.value = value - last_value;
+  m.value = static_cast<double>(delta_uj) / 1.0e6;
   m.timestamp = std::chrono::system_clock::now().time_since_epoch().count();
-  last_value = value;
   return {m};
 }
 
 std::vector<MetricType> RaplCollector::Satisfiable() {
   return {MetricType::METRIC_TYPE_CPU_POWER_PACKAGE};
-}
-
-uint64_t RaplCollector::ReadMSR(uint8_t core, uint32_t offset) {
-  uint64_t data;
-  if (core + 1 > MSR_files_.size()) {
-    throw MSR_Read_Exception();
-  }
-  if (pread(MSR_files_[core], &data, sizeof data, offset) != sizeof data) {
-    throw MSR_Read_Exception();
-  }
-  return data;
-}
-
-void RaplCollector::OpenMSR() {
-  const std::filesystem::path cpu_base = "/dev/cpu";
-  MSR_files_.clear();
-  std::error_code ec;
-
-  if (!std::filesystem::exists(cpu_base, ec)) {
-    throw MSR_Open_Exception();
-  }
-  std::vector<std::pair<int, std::filesystem::path>> cpu_entries;
-  for (const auto& entry : std::filesystem::directory_iterator(cpu_base)) {
-    if (!entry.is_directory()) continue;
-    const auto& dirname = entry.path().filename().string();
-    if (!std::ranges::all_of(dirname, ::isdigit)) continue;
-    cpu_entries.emplace_back(std::stoi(dirname), entry.path());
-  }
-
-  std::ranges::sort(cpu_entries);
-  for (const auto& [id, path] : cpu_entries) {
-    int fd = open((path / "msr").c_str(), O_RDONLY);
-    if (fd >= 0) {
-      MSR_files_.push_back(fd);
-    }
-  }
-  if (MSR_files_.empty()) {
-    throw MSR_Open_Exception();
-  }
-}
-
-void RaplCollector::CloseMSR(int fd) { close(fd); }
-
-RaplCollector::~RaplCollector() {
-  for (auto file : MSR_files_) {
-    CloseMSR(file);
-  }
 }
 
 }  // namespace collectors
