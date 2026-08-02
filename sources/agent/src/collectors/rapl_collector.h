@@ -2,6 +2,7 @@
 #define VOLTA_AGENT_SRC_COLLECTORS_RAPL_COLLECTOR_H_
 
 #include <cstdint>
+#include <filesystem>
 #include <optional>
 #include <string>
 #include <vector>
@@ -22,7 +23,7 @@ class RaplCollector final : public RegisteredCollector<RaplCollector> {
 
  private:
   struct PackageZone {
-    std::string path;
+    std::filesystem::path path;
     std::string name;
     int socket_index = 0;
     uint64_t max_energy_range_uj = 0;
@@ -34,8 +35,8 @@ class RaplCollector final : public RegisteredCollector<RaplCollector> {
                                 uint64_t max_range_uj);
 
   std::vector<PackageZone> DiscoverPackages() const;
-  bool ReadU64File(const std::string& path, uint64_t* out) const;
-  bool ReadNameFile(const std::string& path, std::string* out) const;
+  bool ReadU64File(const std::filesystem::path& path, uint64_t* out) const;
+  bool ReadNameFile(const std::filesystem::path& path, std::string* out) const;
 
   std::vector<MetricType> requested_metrics_;
   bool initialized_ = false;

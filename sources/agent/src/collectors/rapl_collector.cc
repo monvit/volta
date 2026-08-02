@@ -1,14 +1,10 @@
 #include "rapl_collector.h"
 
-#include <dirent.h>
-#include <unistd.h>
-
 #include <algorithm>
-#include <cctype>
 #include <chrono>
-#include <cstring>
 #include <fstream>
 #include <limits>
+#include <regex>
 
 namespace volta {
 namespace agent {
@@ -17,31 +13,25 @@ namespace collectors {
 namespace {
 
 constexpr const char* kPowercapRoot = "/sys/class/powercap";
+constexpr double kMicrojoulesPerJoule = 1.0e6;
 
-bool StartsWith(const std::string& s, const char* prefix) {
-  const size_t n = std::strlen(prefix);
-  return s.size() >= n && s.compare(0, n, prefix) == 0;
-}
+const std::regex kPackageNameRegex(R"(^package(-[0-9]+)?$)");
+const std::regex kPackageIndexRegex(R"(^package-([0-9]+)$)");
 
 }  // namespace
 
 bool RaplCollector::IsPackageName(const std::string& name) {
-  if (name == "package") return true;
-  if (!StartsWith(name, "package-")) return false;
-  const char* p = name.c_str() + 8;
-  if (*p == '\0') return false;
-  while (*p) {
-    if (!std::isdigit(static_cast<unsigned char>(*p))) return false;
-    ++p;
-  }
-  return true;
+  return std::regex_match(name, kPackageNameRegex);
 }
 
 std::optional<int> RaplCollector::ParseSocketIndex(const std::string& name) {
   if (name == "package") return 0;
-  if (!StartsWith(name, "package-")) return std::nullopt;
+  std::smatch match;
+  if (!std::regex_match(name, match, kPackageIndexRegex)) {
+    return std::nullopt;
+  }
   try {
-    return std::stoi(name.substr(8));
+    return std::stoi(match[1].str());
   } catch (...) {
     return std::nullopt;
   }
@@ -56,7 +46,8 @@ uint64_t RaplCollector::DeltaEnergyUj(uint64_t now, uint64_t last,
   return (std::numeric_limits<uint64_t>::max() - last) + now + 1;
 }
 
-bool RaplCollector::ReadU64File(const std::string& path, uint64_t* out) const {
+bool RaplCollector::ReadU64File(const std::filesystem::path& path,
+                                uint64_t* out) const {
   std::ifstream in(path);
   if (!in) return false;
   uint64_t v = 0;
@@ -66,7 +57,7 @@ bool RaplCollector::ReadU64File(const std::string& path, uint64_t* out) const {
   return true;
 }
 
-bool RaplCollector::ReadNameFile(const std::string& path,
+bool RaplCollector::ReadNameFile(const std::filesystem::path& path,
                                  std::string* out) const {
   std::ifstream in(path);
   if (!in) return false;
@@ -83,19 +74,20 @@ bool RaplCollector::ReadNameFile(const std::string& path,
 std::vector<RaplCollector::PackageZone> RaplCollector::DiscoverPackages()
     const {
   std::vector<PackageZone> packages;
-  DIR* d = opendir(kPowercapRoot);
-  if (!d) return packages;
+  std::error_code ec;
+  const std::filesystem::path root(kPowercapRoot);
+  if (!std::filesystem::is_directory(root, ec)) return packages;
 
-  while (dirent* ent = readdir(d)) {
-    if (ent->d_name[0] == '.') continue;
-    const std::string zone_dir = std::string(kPowercapRoot) + "/" + ent->d_name;
-    const std::string name_path = zone_dir + "/name";
-    const std::string energy_path = zone_dir + "/energy_uj";
+  for (const auto& entry : std::filesystem::directory_iterator(root, ec)) {
+    if (!entry.is_directory()) continue;
 
-    if (access(energy_path.c_str(), F_OK) != 0) continue;
+    const auto zone_dir = entry.path();
+    const auto energy_path = zone_dir / "energy_uj";
+    std::ifstream energy_in(energy_path);
+    if (!energy_in) continue;
 
     std::string name;
-    if (!ReadNameFile(name_path, &name)) continue;
+    if (!ReadNameFile(zone_dir / "name", &name)) continue;
     if (!IsPackageName(name)) continue;
 
     PackageZone z;
@@ -104,11 +96,10 @@ std::vector<RaplCollector::PackageZone> RaplCollector::DiscoverPackages()
     auto sock = ParseSocketIndex(name);
     z.socket_index = sock.value_or(-1);
     uint64_t max_range = 0;
-    (void)ReadU64File(zone_dir + "/max_energy_range_uj", &max_range);
+    (void)ReadU64File(zone_dir / "max_energy_range_uj", &max_range);
     z.max_energy_range_uj = max_range;
     packages.push_back(std::move(z));
   }
-  closedir(d);
 
   std::sort(packages.begin(), packages.end(),
             [](const PackageZone& a, const PackageZone& b) {
@@ -119,13 +110,7 @@ std::vector<RaplCollector::PackageZone> RaplCollector::DiscoverPackages()
   return packages;
 }
 
-bool RaplCollector::IsSupported() {
-  const auto packages = DiscoverPackages();
-  for (const auto& p : packages) {
-    if (access((p.path + "/energy_uj").c_str(), R_OK) == 0) return true;
-  }
-  return false;
-}
+bool RaplCollector::IsSupported() { return !DiscoverPackages().empty(); }
 
 bool RaplCollector::Init() {
   initialized_ = false;
@@ -141,7 +126,7 @@ bool RaplCollector::Init() {
   }
 
   uint64_t energy = 0;
-  if (!ReadU64File(it->path + "/energy_uj", &energy)) return false;
+  if (!ReadU64File(it->path / "energy_uj", &energy)) return false;
 
   active_ = *it;
   last_energy_uj_ = energy;
@@ -163,7 +148,7 @@ std::vector<Metric> RaplCollector::Collect() {
   }
 
   uint64_t energy = 0;
-  if (!ReadU64File(active_.path + "/energy_uj", &energy)) return {};
+  if (!ReadU64File(active_.path / "energy_uj", &energy)) return {};
 
   const uint64_t delta_uj =
       DeltaEnergyUj(energy, last_energy_uj_, active_.max_energy_range_uj);
@@ -175,7 +160,7 @@ std::vector<Metric> RaplCollector::Collect() {
   cpu_id.set_socket_index(active_.socket_index >= 0 ? active_.socket_index : 0);
   cpu_id.set_core_index(0);
   m.devId = DeviceId{std::move(cpu_id)};
-  m.value = static_cast<double>(delta_uj) / 1.0e6;
+  m.value = static_cast<double>(delta_uj) / kMicrojoulesPerJoule;
   m.timestamp = std::chrono::system_clock::now().time_since_epoch().count();
   return {m};
 }
