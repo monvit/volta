@@ -77,7 +77,9 @@ target_link_libraries(volta_proto PUBLIC
 file(GLOB_RECURSE AGENT_LIB_SOURCES CONFIGURE_DEPENDS "src/*.cc")
 list(FILTER AGENT_LIB_SOURCES EXCLUDE REGEX ".*/main\\.cc$")
 
-add_library(volta_lib STATIC)
+# OBJECT so collector self-registration always links in
+# see https://github.com/monvit/volta/issues/52
+add_library(volta_lib OBJECT)
 target_sources(volta_lib PRIVATE ${AGENT_LIB_SOURCES})
 
 target_compile_options(volta_lib PRIVATE -std=c++20)
