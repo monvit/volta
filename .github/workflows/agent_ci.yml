@@ -18,7 +18,7 @@ jobs:
     runs-on: ubuntu-latest
 
     env:
-      VCPKG_BINARY_SOURCES: "clear;x-gha,readwrite"
+      VCPKG_BINARY_SOURCES: "default,readwrite"
 
     steps:
     - uses: actions/checkout@v4
@@ -29,13 +29,16 @@ jobs:
         clang-format: true
         cppcheck: true
 
-    - name: Cache vcpkg
+    - name: Set vcpkg binary cache
+      run: echo "VCPKG_DEFAULT_BINARY_CACHE=${{ github.workspace }}/.vcpkg-binary-cache" >> "$GITHUB_ENV"
+
+    - name: Cache vcpkg packages
       uses: actions/cache@v4
       with:
-        path: |
-          ~/.cache/vcpkg
-          sources/agent/build/vcpkg_installed
+        path: ${{ github.workspace }}/.vcpkg-binary-cache
         key: vcpkg-${{ runner.os }}-${{ hashFiles('sources/agent/vcpkg.json') }}
+        restore-keys: |
+          vcpkg-${{ runner.os }}-
 
     - name: Setup vcpkg
       uses: lukka/run-vcpkg@v11
