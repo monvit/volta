@@ -36,7 +36,6 @@ class ConfigLoader {
   static void LoadTimeWindow(toml::table& tbl, Config& out_config);
   static void CheckKeys(toml::table& tbl);
 
-  static std::filesystem::path kUUIDFile;
   static std::set<std::string_view, std::less<>> kValidTopLevelKeys;
 };
 

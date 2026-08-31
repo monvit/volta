@@ -17,8 +17,6 @@ namespace volta {
 namespace agent {
 namespace config {
 
-std::filesystem::path ConfigLoader::kUUIDFile = "agent.uuid";
-
 std::set<std::string_view, std::less<>> ConfigLoader::kValidTopLevelKeys = {
     "core_affinity", "interval", "server_address",
     "server_port",   "metrics",  "time_window"};
