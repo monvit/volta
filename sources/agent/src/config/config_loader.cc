@@ -17,16 +17,18 @@ namespace volta {
 namespace agent {
 namespace config {
 
-// TODO: different path for prod build
-std::filesystem::path ConfigLoader::kConfigFile = "agent.conf";
+std::filesystem::path ConfigLoader::kUUIDFile = "agent.uuid";
 
 std::set<std::string_view, std::less<>> ConfigLoader::kValidTopLevelKeys = {
     "core_affinity", "interval", "server_address",
     "server_port",   "metrics",  "time_window"};
 
-Config ConfigLoader::LoadConfig() {
+Config ConfigLoader::LoadConfig(
+    const std::optional<std::filesystem::path>& file) {
   Config config = LoadDefaultConfig();
-  LoadConfigFile(config);
+  if (file) {
+    LoadConfigFile(*file, config);
+  }
   return config;
 }
 
@@ -93,28 +95,17 @@ bool AddRange(cpu_set_t& set, unsigned int from, unsigned int to,
   return true;
 }
 
-void ConfigLoader::LoadConfigFile(Config& out_config) {
-  // TODO: Proper logging
-  if (!std::filesystem::exists(kConfigFile)) {
-    std::cout << "Agent config file not found, loading default settings."
-              << std::endl;
-    return;
-  }
+void ConfigLoader::LoadConfigFile(const std::filesystem::path& path,
+                                  Config& out_config) {
+  toml::table tbl = toml::parse_file(path.string());
 
-  try {
-    toml::table tbl = toml::parse_file(kConfigFile.string());
-
-    LoadCoreAffinity(tbl, out_config);
-    LoadInterval(tbl, out_config);
-    LoadTimeWindow(tbl, out_config);
-    LoadServerAddress(tbl, out_config);
-    LoadServerPort(tbl, out_config);
-    LoadMetrics(tbl, out_config);
-    CheckKeys(tbl);
-  } catch (const toml::parse_error& err) {
-    std::cerr << "Parsing Agent config failed: " << err.description() << " at "
-              << err.source().begin << std::endl;
-  }
+  LoadCoreAffinity(tbl, out_config);
+  LoadInterval(tbl, out_config);
+  LoadTimeWindow(tbl, out_config);
+  LoadServerAddress(tbl, out_config);
+  LoadServerPort(tbl, out_config);
+  LoadMetrics(tbl, out_config);
+  CheckKeys(tbl);
 }
 
 void ConfigLoader::LoadCoreAffinity(toml::table& tbl, Config& out_config) {

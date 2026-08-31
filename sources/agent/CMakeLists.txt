@@ -125,7 +125,7 @@ else()
         COMMAND ${CMAKE_COMMAND} -E copy_if_different
             ${CMAKE_SOURCE_DIR}/agent.conf
             ${CMAKE_CURRENT_BINARY_DIR}/agent.conf
-        COMMENT "Copying agent.conf..."
+        COMMENT "Copying agent.conf to build directory"
     )
 endif()
 
@@ -146,6 +146,7 @@ if(BUILD_TESTING)
     add_executable(volta_tests)
     target_sources(volta_tests PRIVATE
         tests/series_buffer_test.cc
+        tests/config_resolution_test.cc
     )
     target_link_libraries(volta_tests PRIVATE
         volta_lib

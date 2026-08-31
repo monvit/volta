@@ -5,6 +5,7 @@
 #include "collectors/collector.h"
 #include "config/config.h"
 #include "config/config_loader.h"
+#include "config/config_resolution.h"
 #include "scheduler.h"
 
 using namespace volta::agent;
@@ -56,23 +57,50 @@ int cli_mode(int argc, const char* argv[]) {
   return 1;
 }
 
-int agent_mode() {
+int agent_mode(int argc, const char* const* argv) {
+  auto cli = config::ParseCli(argc, argv);
+  if (!cli) {
+    std::cerr << "error: invalid arguments (try --help)\n";
+    return 2;
+  }
+  if (cli->show_help) {
+    config::PrintAgentHelp(argv[0]);
+    return 0;
+  }
+
+  config::ResolvedConfig resolved;
+  try {
+    resolved = config::ResolveConfig(*cli);
+  } catch (const config::ResolutionError& e) {
+    std::cerr << "error: " << e.what() << "\n";
+    return 1;
+  }
+
+  if (resolved.source == config::ConfigSource::kBuiltinDefaults) {
+    std::cout << "config source: "
+              << config::ConfigSourceToString(resolved.source) << "\n";
+  } else {
+    std::cout << "config source: "
+              << config::ConfigSourceToString(resolved.source) << " ("
+              << resolved.path->string() << ")\n";
+  }
+
   install_signal_handlers();
   try {
-    auto config = config::ConfigLoader::LoadConfig();
+    auto agent_config = config::ConfigLoader::LoadConfig(resolved.path);
 
     auto active_collectors = collectors::CollectorRegistry::Instance().Resolve(
-        config.requestedMetrics);
+        agent_config.requestedMetrics);
 
     std::shared_ptr<MetricsBuffer> buffer =
-        std::make_shared<MetricsBuffer>(config);
-    Scheduler scheduler(config, std::move(active_collectors), buffer);
+        std::make_shared<MetricsBuffer>(agent_config);
+    Scheduler scheduler(agent_config, std::move(active_collectors), buffer);
 
-    std::jthread grpc_thread([&scheduler, &config, &buffer]() {
+    std::jthread grpc_thread([&scheduler, &agent_config, &buffer]() {
       if (auto channel = client::Client::CreateChannel(
-              config.server_address + ":" +
-              std::to_string(config.server_port))) {
-        client::Client grpc_client(channel, config, buffer);
+              agent_config.server_address + ":" +
+              std::to_string(agent_config.server_port))) {
+        client::Client grpc_client(channel, agent_config, buffer);
         grpc_client.Connect();
       } else {
         std::cerr
@@ -98,6 +126,6 @@ int main(int argc, const char* argv[]) {
   if (program_name.ends_with("volta"))
     return cli_mode(argc, argv);
   else if (program_name.ends_with("voltad"))
-    return agent_mode();
+    return agent_mode(argc, argv);
   return 1;
 }

@@ -55,13 +55,23 @@ To configure without tests: `cmake -B build -S . --preset default -DBUILD_TESTIN
 
 ```bash
 # May require root/admin privileges to access RAPL/Affinity features.
-./build/voltad
+./build/voltad --config agent.conf
 ```
 
 ## Agent Configuration
 
-The agent reads its configuration from `agent.conf` in the current working directory.
-If the file is missing, the agent starts with built-in defaults.
+`voltad` looks for configuration in this order:
+
+1. `--config PATH`
+2. `$VOLTA_CONFIG`
+3. `/etc/volta/agent.conf` (optional; missing → built-in defaults)
+4. built-in defaults
+
+For local builds, pass the config explicitly:
+
+```bash
+./build/voltad --config agent.conf
+```
 
 You can use `sources/agent/agent.example.conf` as a starting point.
 
