@@ -18,16 +18,16 @@ namespace {
 
 class TempDir {
  public:
-  explicit TempDir(const std::string& prefix) {
-    static int counter = 0;
-    path_ = std::filesystem::temp_directory_path() /
-            (prefix + "-" + std::to_string(++counter));
+  explicit TempDir(const std::string& prefix)
+      : path_(std::filesystem::temp_directory_path() /
+              (prefix + "-" + std::to_string(++counter_))) {
     std::filesystem::create_directories(path_);
   }
   ~TempDir() { std::filesystem::remove_all(path_); }
   const std::filesystem::path& path() const { return path_; }
 
  private:
+  inline static int counter_ = 0;
   std::filesystem::path path_;
 };
 
