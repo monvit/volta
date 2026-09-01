@@ -21,7 +21,7 @@ jobs:
       VCPKG_BINARY_SOURCES: "default,readwrite"
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v7
 
     - name: Setup C++ tools
       uses: aminya/setup-cpp@v1
