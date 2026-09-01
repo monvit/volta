@@ -10,6 +10,7 @@ Vite · React 19 (+ React Compiler) · TypeScript · pnpm · Tailwind v4 · shad
 
 ```bash
 vp install            # or: use pnpm directly
+pnpm run proto:gen    # once after clone, or after editing ../proto/**
 vp dev                # serves on :5173
 vp build              # outputs to dist/
 vp preview            # serve the built output for testing

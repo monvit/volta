@@ -1,10 +1,3 @@
-# Generates JS + type declarations from the shared proto definitions in ../proto.
-# Run via `pnpm run proto:gen`.
-#
-# Output lives in src/proto/gen and is committed so the build does not depend on
-# the buf toolchain. js+dts keeps the generated code (and its non-erasable enums)
-# out of our strict type-check pass while still providing full types via .d.ts.
-# Re-run after editing ../proto/**.
 version: v2
 inputs:
   - directory: ../proto
