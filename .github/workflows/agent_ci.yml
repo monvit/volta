@@ -29,8 +29,8 @@ jobs:
         clang-format: true
         cppcheck: true
 
-    - name: Set vcpkg binary cache
-      run: echo "VCPKG_DEFAULT_BINARY_CACHE=${{ github.workspace }}/.vcpkg-binary-cache" >> "$GITHUB_ENV"
+    - name: Prepare vcpkg binary cache dir
+      run: mkdir -p "${{ github.workspace }}/.vcpkg-binary-cache"
 
     - name: Cache vcpkg packages
       uses: actions/cache@v4
@@ -44,6 +44,7 @@ jobs:
       uses: lukka/run-vcpkg@v11
       with:
         vcpkgJsonGlob: 'sources/agent/vcpkg.json'
+        binaryCachePath: ${{ github.workspace }}/.vcpkg-binary-cache
 
     - name: Check Code Formatting
       run: |
