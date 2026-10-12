@@ -109,7 +109,9 @@ int agent_mode(int argc, const char* const* argv) {
 
     std::shared_ptr<MetricsBuffer> buffer =
         std::make_shared<MetricsBuffer>(agent_config);
-    Scheduler scheduler(agent_config, std::move(active_collectors), buffer);
+
+    Scheduler scheduler(agent_config, std::move(active_collectors), buffer,
+                        logger.WithName("Scheduler"));
 
     std::jthread grpc_thread([&scheduler, &agent_config, &buffer]() {
       if (auto channel = client::Client::CreateChannel(

@@ -10,6 +10,7 @@
 #include "collectors/collector.h"
 #include "config/config.h"
 #include "exporter.h"
+#include "logger/logger.h"
 #include "message_queue.h"
 #include "metric.h"
 
@@ -22,7 +23,8 @@ class Scheduler {
  public:
   explicit Scheduler(const config::Config& config,
                      std::vector<collectors::Collector*>&& collectors,
-                     std::shared_ptr<MetricsBuffer> buffer);
+                     std::shared_ptr<MetricsBuffer> buffer,
+                     std::unique_ptr<logging::Logger> logger);
 
   void Run();
 
@@ -32,6 +34,7 @@ class Scheduler {
   void PrintDashboard();
   static std::string DescribeKey(const BufferKey& key);
 
+  std::unique_ptr<logging::Logger> logger_;
   std::vector<collectors::Collector*> collectors_;
   const config::Config& config_;
   std::shared_ptr<MetricsBuffer> buffer_;
