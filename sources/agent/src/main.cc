@@ -1,3 +1,5 @@
+#include <spdlog/sinks/stdout_color_sinks.h>
+
 #include <iostream>
 #include <string>
 
@@ -6,9 +8,12 @@
 #include "config/config.h"
 #include "config/config_loader.h"
 #include "config/config_resolution.h"
+#include "logger/spdlog_logger.h"
 #include "scheduler.h"
 
 using namespace volta::agent;
+using logging::LogLevel;
+
 static void on_signal(int) { g_running = 0; }
 
 void install_signal_handlers() {
@@ -88,6 +93,16 @@ int agent_mode(int argc, const char* const* argv) {
   install_signal_handlers();
   try {
     auto agent_config = config::ConfigLoader::LoadConfig(resolved.path);
+
+    // TODO: Add configured LogLevel and backend type (stderr/file)
+    auto sink = std::make_shared<spdlog::sinks::stderr_color_sink_mt>();
+
+    auto logger_backend =
+        std::make_shared<spdlog::logger>("stderr_logger", sink);
+    logger_backend->set_pattern("[%^%l%$] [%n] %v");
+
+    auto logger = logging::SpdlogLogger(logger_backend, "Agent");
+    collectors::CollectorRegistry::Instance().SetLoggers(logger);
 
     auto active_collectors = collectors::CollectorRegistry::Instance().Resolve(
         agent_config.requestedMetrics);
