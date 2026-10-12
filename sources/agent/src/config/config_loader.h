@@ -8,6 +8,7 @@
 #include <toml++/toml.hpp>
 
 #include "config/config.h"
+#include "logger/logger.h"
 
 namespace volta {
 namespace agent {
@@ -36,6 +37,7 @@ class ConfigLoader {
   static void LoadTimeWindow(toml::table& tbl, Config& out_config);
   static void CheckKeys(toml::table& tbl);
 
+  static std::unique_ptr<logging::Logger> logger_;
   static std::set<std::string_view, std::less<>> kValidTopLevelKeys;
 };
 
