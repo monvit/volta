@@ -8,11 +8,13 @@
 #include "config/config.h"
 #include "connect_reactor.h"
 #include "imessage_handler.h"
+#include "logger/logger.h"
 #include "stream_metrics_reactor.h"
 #include "volta.grpc.pb.h"
 
 namespace volta {
 namespace agent {
+using logging::LogLevel;
 
 class MetricsBuffer;
 
@@ -21,7 +23,8 @@ namespace client {
 class Client final : public IMessageHandler {
  public:
   Client(std::shared_ptr<grpc::Channel> channel, config::Config& config,
-         std::shared_ptr<::volta::agent::MetricsBuffer> buffer);
+         std::shared_ptr<::volta::agent::MetricsBuffer> buffer,
+         std::unique_ptr<logging::Logger> logger);
   ~Client() override = default;
 
   void Connect();
@@ -45,6 +48,7 @@ class Client final : public IMessageHandler {
   std::unique_ptr<::volta::VoltaCollector::Stub> stub_;
   std::unique_ptr<ConnectReactor> connect_reactor_;
   std::unique_ptr<StreamMetricsReactor> stream_data_reactor_;
+  std::unique_ptr<logging::Logger> logger_;
 
   static std::filesystem::path kUUIDFile;
 };

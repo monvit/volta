@@ -13,10 +13,12 @@ namespace client {
 std::filesystem::path Client::kUUIDFile = "agent.uuid";
 
 Client::Client(std::shared_ptr<grpc::Channel> channel, config::Config& config,
-               std::shared_ptr<::volta::agent::MetricsBuffer> buffer)
+               std::shared_ptr<::volta::agent::MetricsBuffer> buffer,
+               std::unique_ptr<logging::Logger> logger)
     : stub_(::volta::VoltaCollector::NewStub(channel)),
       config_(config),
-      buffer_(buffer) {}
+      buffer_(buffer),
+      logger_(std::move(logger)) {}
 
 // TODO: consider making this more configurable, e.g. support TLS, custom
 // options, etc.
@@ -49,13 +51,14 @@ bool Client::LoadUUID(std::string& out_uuid) {
 
 void Client::SaveUUID(const std::string& uuid) {
   if (uuid.empty()) {
-    std::cerr << "Cannot save empty UUID" << std::endl;
+    logger_->Log(LogLevel::ERROR_LEVEL, "Cannot save empty UUID");
     connect_reactor_->EnqueueWrite(
         connect_reactor_->CreateMessage(::volta::MessageType::MESSAGE_ERROR,
                                         "Empty UUID received from server"));
     return;
   } else if (std::filesystem::exists(kUUIDFile)) {
-    std::cerr << "UUID file already exists, refusing to overwrite" << std::endl;
+    logger_->Log(LogLevel::ERROR_LEVEL,
+                 "UUID file already exists, refusing to overwrite");
     connect_reactor_->EnqueueWrite(
         connect_reactor_->CreateMessage(::volta::MessageType::MESSAGE_ERROR,
                                         "UUID file already exists on agent"));
@@ -83,14 +86,14 @@ void Client::Connect() {
   grpc::Status status = connect_reactor_->Await();
 
   if (!status.ok()) {
-    std::cout << "Stream closed with error: " << status.error_message()
-              << std::endl;
+    logger_->Log(LogLevel::ERROR_LEVEL, "Stream closed with error: {}",
+                 status.error_message());
   }
 }
 
 void Client::OnMessage(const ::volta::ControlMessage& msg) {
-  std::cout << "Received message from server: " << msg.DebugString()
-            << std::endl;
+  logger_->Log(LogLevel::DEBUG_LEVEL, "Received message from server: {}",
+               msg.DebugString());
 
   switch (msg.type()) {
     // TODO: move pinging to grpc server itself
@@ -117,7 +120,7 @@ void Client::OnMessage(const ::volta::ControlMessage& msg) {
     }
 
     case ::volta::MessageType::MESSAGE_ERROR: {
-      std::cerr << "Received error message from server" << std::endl;
+      logger_->Log(LogLevel::ERROR_LEVEL, "Received error message from server");
       break;
     }
 
@@ -126,13 +129,15 @@ void Client::OnMessage(const ::volta::ControlMessage& msg) {
     }
 
     case ::volta::MessageType::MESSAGE_ID: {
-      std::cout << "Received ID from server: " << msg.payload() << std::endl;
+      logger_->Log(LogLevel::INFO_LEVEL, "Received ID from server: {}",
+                   msg.payload());
       SaveUUID(msg.payload());
       break;
     }
 
     default: {
-      std::cerr << "Received unknown message type from server" << std::endl;
+      logger_->Log(LogLevel::ERROR_LEVEL,
+                   "Received unknown message type from server");
       break;
     }
   }
@@ -145,15 +150,15 @@ void Client::SendData() {
 
 void Client::StreamData() {
   if (buffer_ == nullptr) {
-    std::cerr << "Cannot stream data: buffer is null" << std::endl;
+    logger_->Log(LogLevel::ERROR_LEVEL, "Cannot stream data: buffer is null");
     connect_reactor_->EnqueueWrite(connect_reactor_->CreateMessage(
         ::volta::MessageType::MESSAGE_ERROR, "Metrics buffer is null"));
     return;
   }
 
   if (stream_data_reactor_ != nullptr) {
-    std::cerr << "StreamData RPC already active, refusing to start another"
-              << std::endl;
+    logger_->Log(LogLevel::ERROR_LEVEL,
+                 "StreamData RPC already active, refusing to start another");
     connect_reactor_->EnqueueWrite(connect_reactor_->CreateMessage(
         ::volta::MessageType::MESSAGE_ERROR, "StreamData RPC already active"));
     return;
@@ -162,10 +167,11 @@ void Client::StreamData() {
   stream_data_reactor_ = std::make_unique<StreamMetricsReactor>(
       stub_.get(), id_, buffer_, [this](const grpc::Status& status) {
         if (!status.ok()) {
-          std::cerr << "StreamData RPC failed: " << status.error_message()
-                    << std::endl;
+          logger_->Log(LogLevel::ERROR_LEVEL, "StreamData RPC failed: {}",
+                       status.error_message());
         } else {
-          std::cout << "StreamData RPC completed successfully" << std::endl;
+          logger_->Log(LogLevel::NOISY_LEVEL,
+                       "StreamData RPC completed successfully");
         }
       });
 
