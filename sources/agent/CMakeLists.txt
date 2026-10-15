@@ -147,6 +147,8 @@ if(BUILD_TESTING)
     target_sources(volta_tests PRIVATE
         tests/series_buffer_test.cc
         tests/config_resolution_test.cc
+        tests/control_command_test.cc
+        tests/control_socket_test.cc
     )
     target_link_libraries(volta_tests PRIVATE
         volta_lib

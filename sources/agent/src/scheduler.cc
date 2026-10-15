@@ -5,6 +5,11 @@
 #include <iostream>
 #include <sstream>
 #include <thread>
+#include <utility>
+#include <variant>
+
+#include "control/control_command.h"
+#include "control/control_socket_path.h"
 
 volatile sig_atomic_t g_running = 1;
 
@@ -17,9 +22,11 @@ Scheduler::Scheduler(const config::Config& config,
     : collectors_(std::move(collectors)),
       config_(config),
       buffer_(buffer),
-      exporter_(config),
-      ms_queue_("/volta_agent_command_queue", MessageQueue::Role::Receiver,
-                {}) {}
+      control_socket_(
+          control::ResolveControlSocketPath(control::ControlPathSide::kDaemon)
+              .string(),
+          control::ControlSocket::Role::kServer),
+      exporter_(config) {}
 
 void Scheduler::Run() {
   for (auto collector : collectors_) {
@@ -28,19 +35,16 @@ void Scheduler::Run() {
 
   std::cout << "Starting collection loop (Interval: "
             << config_.collection_interval.count() << "ms)..." << std::endl;
-  ms_queue_.listen([this](std::string_view message) {
-    if (message.starts_with("dump_start")) {
-      std::optional<std::string> path = std::nullopt;
-      if (message.size() > 11) {
-        int path_start = message.find(";");
-        message.remove_prefix(path_start + 1);
-        path = message;
-      }
-      std::cout << "path: " << *path << std::endl;
-      this->exporter_.StartDump(path);
+  control_socket_.Listen([this](std::string_view message) {
+    auto command = control::Decode(message);
+    if (!command) {
+      std::cerr << "control socket: dropped unrecognized command\n";
+      return;
     }
-    if (message.starts_with("dump_end")) {
-      this->exporter_.EndDump();
+    if (const auto* start = std::get_if<control::DumpStart>(&*command)) {
+      exporter_.StartDump(start->path);
+    } else {
+      exporter_.EndDump();
     }
   });
   while (g_running) {
@@ -57,7 +61,7 @@ void Scheduler::Run() {
     std::this_thread::sleep_for(config_.collection_interval);
   }
   exporter_.EndDump();
-  ms_queue_.stop_listening();
+  control_socket_.StopListening();
 }
 
 std::string Scheduler::DescribeKey(const BufferKey& key) {
