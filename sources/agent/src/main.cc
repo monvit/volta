@@ -1,11 +1,16 @@
+#include <filesystem>
 #include <iostream>
 #include <string>
+#include <string_view>
 
 #include "client/volta_collector_client.h"
 #include "collectors/collector.h"
 #include "config/config.h"
 #include "config/config_loader.h"
 #include "config/config_resolution.h"
+#include "control/control_command.h"
+#include "control/control_socket.h"
+#include "control/control_socket_path.h"
 #include "scheduler.h"
 
 using namespace volta::agent;
@@ -21,39 +26,63 @@ void install_signal_handlers() {
   sigaction(SIGTERM, &sa, nullptr);
 }
 
-int cli_mode(int argc, const char* argv[]) {
-  if (argc < 2) return 1;
-
-  MessageQueue msq("/volta_agent_command_queue", MessageQueue::Role::Sender,
-                   {});
-  std::string command(argv[1]);
-
-  if (command == "export") {
-    if (argc < 3) return 1;
-    std::string subcommand(argv[2]);
-
-    if (subcommand == "start") {
-      std::string file("");
-      if (argc >= 4) {
-        std::filesystem::path fp(argv[3]);
-        file = std::filesystem::absolute(fp).string();
-      }
-      std::string message = std::format("dump_start;{}", file);
-      // std::string message = "dump_start";
-      msq.send(message);
-      std::cout << "Message " << message << " sent" << std::endl;
-      return 0;
+int SendControlCommand(const control::ControlCommand& command) {
+  try {
+    auto path =
+        control::ResolveControlSocketPath(control::ControlPathSide::kCli);
+    control::ControlSocket socket(path.string(),
+                                  control::ControlSocket::Role::kClient);
+    auto payload = control::Encode(command);
+    int err = 0;
+    if (!socket.Send(payload, &err)) {
+      std::cerr << "error: " << control::DescribeSendError(err) << "\n";
+      return 1;
     }
-
-    if (subcommand == "stop") {
-      msq.send("dump_end");
-      std::cout << "Message dump_end sent" << std::endl;
-      return 0;
-    }
-
+    std::cout << "Message " << payload << " sent\n";
+    return 0;
+  } catch (const std::exception& ex) {
+    std::cerr << "error: " << ex.what() << "\n";
     return 1;
   }
+}
 
+struct CliCommand {
+  std::string_view name;
+  int (*run)(int argc, const char* argv[]);
+};
+
+int RunExportStart(int argc, const char* argv[]) {
+  control::DumpStart command;
+  if (argc >= 4) command.path = std::filesystem::absolute(argv[3]);
+  return SendControlCommand(command);
+}
+
+int RunExportStop(int, const char**) {
+  return SendControlCommand(control::DumpEnd{});
+}
+
+int RunExport(int argc, const char* argv[]) {
+  if (argc < 3) return 1;
+  static constexpr CliCommand kExport[] = {
+      {"start", RunExportStart},
+      {"stop", RunExportStop},
+  };
+  std::string_view name(argv[2]);
+  for (const auto& subcommand : kExport) {
+    if (name == subcommand.name) return subcommand.run(argc, argv);
+  }
+  return 1;
+}
+
+int cli_mode(int argc, const char* argv[]) {
+  if (argc < 2) return 1;
+  static constexpr CliCommand kCommands[] = {
+      {"export", RunExport},
+  };
+  std::string_view name(argv[1]);
+  for (const auto& command : kCommands) {
+    if (name == command.name) return command.run(argc, argv);
+  }
   return 1;
 }
 
