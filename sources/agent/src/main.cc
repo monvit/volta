@@ -1,5 +1,3 @@
-#include <spdlog/sinks/stdout_color_sinks.h>
-
 #include <iostream>
 #include <string>
 
@@ -8,7 +6,7 @@
 #include "config/config.h"
 #include "config/config_loader.h"
 #include "config/config_resolution.h"
-#include "logger/spdlog_logger.h"
+#include "logger/logger_builder.h"
 #include "scheduler.h"
 
 using namespace volta::agent;
@@ -63,14 +61,12 @@ int cli_mode(int argc, const char* argv[]) {
 }
 
 int agent_mode(int argc, const char* const* argv) {
-  auto sink = std::make_shared<spdlog::sinks::stderr_color_sink_mt>();
-  auto logger_backend = std::make_shared<spdlog::logger>("stderr_logger", sink);
-  logger_backend->set_pattern("[%^%l%$] [%n] %v");
-  auto logger = logging::SpdlogLogger(logger_backend, "Agent");
+  config::Config default_config;
+  auto logger = logging::BuildLogger(default_config);
 
   auto cli = config::ParseCli(argc, argv);
   if (!cli) {
-    logger.Log(LogLevel::ERROR_LEVEL, "Invalid arguments (try --help)");
+    logger->Log(LogLevel::ERROR_LEVEL, "Invalid arguments (try --help)");
     return 2;
   }
   if (cli->show_help) {
@@ -82,25 +78,25 @@ int agent_mode(int argc, const char* const* argv) {
   try {
     resolved = config::ResolveConfig(*cli);
   } catch (const config::ResolutionError& e) {
-    logger.Log(LogLevel::ERROR_LEVEL, "{}", e.what());
+    logger->Log(LogLevel::ERROR_LEVEL, "{}", e.what());
     return 1;
   }
 
   if (resolved.source == config::ConfigSource::kBuiltinDefaults) {
-    logger.Log(LogLevel::INFO_LEVEL, "Config source: {}",
-               config::ConfigSourceToString(resolved.source));
+    logger->Log(LogLevel::INFO_LEVEL, "Config source: {}",
+                config::ConfigSourceToString(resolved.source));
   } else {
-    logger.Log(LogLevel::INFO_LEVEL, "Config source: {} ({})",
-               config::ConfigSourceToString(resolved.source),
-               resolved.path->string());
+    logger->Log(LogLevel::INFO_LEVEL, "Config source: {} ({})",
+                config::ConfigSourceToString(resolved.source),
+                resolved.path->string());
   }
 
   install_signal_handlers();
   try {
     auto agent_config = config::ConfigLoader::LoadConfig(resolved.path);
+    logger = logging::BuildLogger(agent_config);
 
-    // TODO: Add configured LogLevel and backend type (stderr/file)
-    collectors::CollectorRegistry::Instance().SetLoggers(logger);
+    collectors::CollectorRegistry::Instance().SetLoggers(*logger);
 
     auto active_collectors = collectors::CollectorRegistry::Instance().Resolve(
         agent_config.requestedMetrics);
@@ -108,9 +104,9 @@ int agent_mode(int argc, const char* const* argv) {
     std::shared_ptr<MetricsBuffer> buffer =
         std::make_shared<MetricsBuffer>(agent_config);
     Scheduler scheduler(agent_config, std::move(active_collectors), buffer,
-                        logger.WithName("Scheduler"));
+                        logger->WithName("Scheduler"));
 
-    auto grpc_logger = logger.WithName("gRPC");
+    auto grpc_logger = logger->WithName("gRPC");
     std::jthread grpc_thread([logger = std::move(grpc_logger), &scheduler,
                               &agent_config, &buffer]() {
       if (auto channel = client::Client::CreateChannel(
@@ -130,10 +126,10 @@ int agent_mode(int argc, const char* const* argv) {
     scheduler.Run();
 
   } catch (const std::exception& e) {
-    logger.Log(LogLevel::ERROR_LEVEL, "Critical error: {}", e.what());
+    logger->Log(LogLevel::ERROR_LEVEL, "Critical error: {}", e.what());
     return 1;
   }
-  logger.Log(LogLevel::INFO_LEVEL, "Agent exited successfully");
+  logger->Log(LogLevel::INFO_LEVEL, "Agent exited successfully");
   return 0;
 }
 

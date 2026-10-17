@@ -4,6 +4,7 @@
 #include <atomic>
 #include <mutex>
 #include <queue>
+#include <thread>
 #include <unordered_map>
 
 #include "buffer.h"
