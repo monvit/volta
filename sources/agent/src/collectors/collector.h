@@ -3,12 +3,14 @@
 
 #include <vector>
 
+#include "logger/logger.h"
 #include "metric.h"
-#include "platform/hardware_info.h"
 
 namespace volta {
 namespace agent {
 namespace collectors {
+
+using logging::Logger;
 
 class Collector {
  public:
@@ -22,7 +24,16 @@ class Collector {
 
   virtual void SetRequestedMetrics(const std::vector<MetricType>& metrics) = 0;
 
+  virtual void SetLogger(std::unique_ptr<Logger>&& logger) {
+    logger_ = std::move(logger);
+  }
+
+  virtual std::string_view GetName() = 0;
+
   virtual bool Init() { return true; }
+
+ protected:
+  std::unique_ptr<Logger> logger_;
 };
 
 class CollectorRegistry {
@@ -54,6 +65,12 @@ class CollectorRegistry {
       }
     }
     return result;
+  }
+
+  void SetLoggers(const Logger& logger) {
+    for (auto& collector : entries_) {
+      collector->SetLogger(std::move(logger.WithName(collector->GetName())));
+    }
   }
 
  private:

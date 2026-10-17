@@ -16,6 +16,7 @@ class ProcStatCollector final : public RegisteredCollector<ProcStatCollector> {
   bool IsSupported() override;
   std::vector<MetricType> Satisfiable() override;
   void SetRequestedMetrics(const std::vector<MetricType>& metrics) override;
+  std::string_view GetName() override { return "ProcStat Collector"; }
 
  private:
   void ReadCpuStats(uint64_t& idle_time, uint64_t& total_time);

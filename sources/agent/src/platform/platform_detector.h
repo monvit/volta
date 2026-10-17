@@ -3,6 +3,7 @@
 
 #include <string>
 
+#include "logger/logger.h"
 #include "platform/hardware_info.h"
 
 namespace volta {
@@ -12,7 +13,7 @@ namespace platform {
 class PlatformDetector {
  public:
   HardwareInfo Detect();
-  void PrintDetectedInfo(const HardwareInfo& info);
+  void LogDetectedInfo(const HardwareInfo& info, logging::Logger& logger) const;
 
  private:
   std::string DetectOS();
