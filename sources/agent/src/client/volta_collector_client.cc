@@ -82,7 +82,8 @@ void Client::Connect() {
   // TODO: handle case where UUID file exists but is empty or invalid
   LoadUUID(id_);
 
-  connect_reactor_ = std::make_unique<ConnectReactor>(this, id_, stub_.get());
+  connect_reactor_ = std::make_unique<ConnectReactor>(
+      this, id_, stub_.get(), logger_->WithName("ConnectReactor"));
   grpc::Status status = connect_reactor_->Await();
 
   if (!status.ok()) {
@@ -165,7 +166,8 @@ void Client::StreamData() {
   }
 
   stream_data_reactor_ = std::make_unique<StreamMetricsReactor>(
-      stub_.get(), id_, buffer_, [this](const grpc::Status& status) {
+      stub_.get(), id_, buffer_,
+      [this](const grpc::Status& status) {
         if (!status.ok()) {
           logger_->Log(LogLevel::ERROR_LEVEL, "StreamData RPC failed: {}",
                        status.error_message());
@@ -173,7 +175,8 @@ void Client::StreamData() {
           logger_->Log(LogLevel::NOISY_LEVEL,
                        "StreamData RPC completed successfully");
         }
-      });
+      },
+      logger_->WithName("StreamMetricsReactor"));
 
   connect_reactor_->EnqueueWrite(
       connect_reactor_->CreateMessage(::volta::MessageType::MESSAGE_OK));

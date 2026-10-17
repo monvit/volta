@@ -3,11 +3,13 @@
 
 #include <string>
 
+#include "logger/logger.h"
+
 namespace volta {
 namespace agent {
 namespace utils {
 
-void PrintCurrentAffinity();
+void PrintCurrentAffinity(logging::Logger& logger);
 bool IsValidIP(const std::string& ip);
 bool IsResolvable(const std::string& host);
 std::string GenerateUUIDv4();

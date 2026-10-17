@@ -4,11 +4,12 @@
 #include <spdlog/sinks/stdout_color_sinks.h>
 
 #include <algorithm>
+#include <cerrno>
 #include <chrono>
 #include <cstdint>
+#include <cstring>
 #include <filesystem>
 #include <fstream>
-#include <iostream>
 #include <string>
 
 #include "config_loader.h"
@@ -28,11 +29,10 @@ std::set<std::string_view, std::less<>> ConfigLoader::kValidTopLevelKeys = {
 // stderr logger seems like a sane fallback
 std::unique_ptr<logging::Logger> ConfigLoader::logger_ =
     std::make_unique<logging::SpdlogLogger>(
-        spdlog::stdout_color_mt("Config Loader"));
+        spdlog::stderr_color_mt("Config Loader"));
 
 Config ConfigLoader::LoadConfig(
     const std::optional<std::filesystem::path>& file) {
-
   Config config = LoadDefaultConfig();
   if (file) {
     LoadConfigFile(*file, config);
@@ -170,7 +170,8 @@ void ConfigLoader::LoadCoreAffinity(toml::table& tbl, Config& out_config) {
       }
     }
     if (sched_setaffinity(0, sizeof(cpu_set_t), &mask) == -1) {
-      perror("sched_setaffinity");
+      logger_->Log(LogLevel::ERROR_LEVEL, "sched_setaffinity failed: {}",
+                   std::strerror(errno));
     } else {
       logger_->Log(LogLevel::INFO_LEVEL, "Successfully set CPU affinity mask.");
     }

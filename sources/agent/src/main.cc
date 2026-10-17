@@ -63,9 +63,14 @@ int cli_mode(int argc, const char* argv[]) {
 }
 
 int agent_mode(int argc, const char* const* argv) {
+  auto sink = std::make_shared<spdlog::sinks::stderr_color_sink_mt>();
+  auto logger_backend = std::make_shared<spdlog::logger>("stderr_logger", sink);
+  logger_backend->set_pattern("[%^%l%$] [%n] %v");
+  auto logger = logging::SpdlogLogger(logger_backend, "Agent");
+
   auto cli = config::ParseCli(argc, argv);
   if (!cli) {
-    std::cerr << "error: invalid arguments (try --help)\n";
+    logger.Log(LogLevel::ERROR_LEVEL, "Invalid arguments (try --help)");
     return 2;
   }
   if (cli->show_help) {
@@ -77,17 +82,17 @@ int agent_mode(int argc, const char* const* argv) {
   try {
     resolved = config::ResolveConfig(*cli);
   } catch (const config::ResolutionError& e) {
-    std::cerr << "error: " << e.what() << "\n";
+    logger.Log(LogLevel::ERROR_LEVEL, "{}", e.what());
     return 1;
   }
 
   if (resolved.source == config::ConfigSource::kBuiltinDefaults) {
-    std::cout << "config source: "
-              << config::ConfigSourceToString(resolved.source) << "\n";
+    logger.Log(LogLevel::INFO_LEVEL, "Config source: {}",
+               config::ConfigSourceToString(resolved.source));
   } else {
-    std::cout << "config source: "
-              << config::ConfigSourceToString(resolved.source) << " ("
-              << resolved.path->string() << ")\n";
+    logger.Log(LogLevel::INFO_LEVEL, "Config source: {} ({})",
+               config::ConfigSourceToString(resolved.source),
+               resolved.path->string());
   }
 
   install_signal_handlers();
@@ -95,13 +100,6 @@ int agent_mode(int argc, const char* const* argv) {
     auto agent_config = config::ConfigLoader::LoadConfig(resolved.path);
 
     // TODO: Add configured LogLevel and backend type (stderr/file)
-    auto sink = std::make_shared<spdlog::sinks::stderr_color_sink_mt>();
-
-    auto logger_backend =
-        std::make_shared<spdlog::logger>("stderr_logger", sink);
-    logger_backend->set_pattern("[%^%l%$] [%n] %v");
-
-    auto logger = logging::SpdlogLogger(logger_backend, "Agent");
     collectors::CollectorRegistry::Instance().SetLoggers(logger);
 
     auto active_collectors = collectors::CollectorRegistry::Instance().Resolve(
@@ -113,29 +111,29 @@ int agent_mode(int argc, const char* const* argv) {
                         logger.WithName("Scheduler"));
 
     auto grpc_logger = logger.WithName("gRPC");
-    std::jthread grpc_thread(
-        [logger = std::move(grpc_logger), &scheduler, &agent_config, &buffer]() {
-          if (auto channel = client::Client::CreateChannel(
-                  agent_config.server_address + ":" +
-                  std::to_string(agent_config.server_port))) {
-            client::Client grpc_client(channel, agent_config, buffer,
-                                       logger->WithName("gRPC Client"));
-            grpc_client.Connect();
-          } else {
-            logger->Log(
-                LogLevel::ERROR_LEVEL,
-                "Failed to create channel, falling back to local dashboard");
-            // scheduler.print_dashboard.store(true);
-          }
-        });
+    std::jthread grpc_thread([logger = std::move(grpc_logger), &scheduler,
+                              &agent_config, &buffer]() {
+      if (auto channel = client::Client::CreateChannel(
+              agent_config.server_address + ":" +
+              std::to_string(agent_config.server_port))) {
+        client::Client grpc_client(channel, agent_config, buffer,
+                                   logger->WithName("gRPC Client"));
+        grpc_client.Connect();
+      } else {
+        logger->Log(
+            LogLevel::ERROR_LEVEL,
+            "Failed to create channel, falling back to local dashboard");
+        // scheduler.print_dashboard.store(true);
+      }
+    });
 
     scheduler.Run();
 
   } catch (const std::exception& e) {
-    std::cerr << "CRITICAL ERROR: " << e.what() << std::endl;
+    logger.Log(LogLevel::ERROR_LEVEL, "Critical error: {}", e.what());
     return 1;
   }
-  std::cout << "Agent exited successfully" << std::endl;
+  logger.Log(LogLevel::INFO_LEVEL, "Agent exited successfully");
   return 0;
 }
 

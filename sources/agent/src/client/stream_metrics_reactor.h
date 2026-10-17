@@ -7,6 +7,7 @@
 #include <unordered_map>
 
 #include "buffer.h"
+#include "logger/logger.h"
 #include "volta.grpc.pb.h"
 
 namespace volta {
@@ -23,7 +24,8 @@ class StreamMetricsReactor final
   StreamMetricsReactor(::volta::VoltaCollector::Stub* stub,
                        const std::string& id,
                        std::shared_ptr<::volta::agent::MetricsBuffer> buffer,
-                       OnDoneCallback on_done);
+                       OnDoneCallback on_done,
+                       std::unique_ptr<logging::Logger> logger);
   ~StreamMetricsReactor() override = default;
 
   // ClientBidiReactor
@@ -39,6 +41,7 @@ class StreamMetricsReactor final
   void EnqueueMetrics(const BufferKey& key);
 
   OnDoneCallback on_done_;
+  std::unique_ptr<logging::Logger> logger_;
   grpc::ClientContext context_;
   std::shared_ptr<MetricsBuffer> buffer_;
 

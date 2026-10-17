@@ -4,7 +4,6 @@
 
 #include <cstring>
 #include <fstream>
-#include <iostream>
 #include <string>
 
 #ifdef HAVE_NVML
@@ -92,24 +91,23 @@ HardwareInfo PlatformDetector::Detect() {
   return info;
 }
 
-void PlatformDetector::PrintDetectedInfo(const HardwareInfo& info) {
-  std::cout << "[" << typeid(*this).name() << "] Hardware Detection Result:\n";
-  std::cout << "  > Host:  " << info.hostname << "\n";
-  std::cout << "  > OS:    " << info.os_version << "\n";
-  std::cout << "  > CPU:   " << CpuVendorToString(info.cpu.vendor) << "\n"
-            << "  | Model: " << info.cpu.model_name << "\n";
+void PlatformDetector::LogDetectedInfo(const HardwareInfo& info,
+                                       logging::Logger& logger) const {
+  logger.Log(logging::LogLevel::INFO_LEVEL, "Hardware detection result");
+  logger.Log(logging::LogLevel::INFO_LEVEL, "Host: {}", info.hostname);
+  logger.Log(logging::LogLevel::INFO_LEVEL, "OS: {}", info.os_version);
+  logger.Log(logging::LogLevel::INFO_LEVEL, "CPU: {} ({})",
+             CpuVendorToString(info.cpu.vendor), info.cpu.model_name);
 
   if (info.gpus.empty()) {
-    std::cout << "  > GPU:  None detected (or NVML disabled)\n";
+    logger.Log(logging::LogLevel::INFO_LEVEL,
+               "GPU: none detected (or NVML disabled)");
   } else {
     for (const auto& gpu : info.gpus) {
-      std::cout << "  > GPU:   " << GpuVendorToString(gpu.vendor) << "\n"
-                << "  | Model: " << gpu.model_name << "\n";
+      logger.Log(logging::LogLevel::INFO_LEVEL, "GPU: {} ({})",
+                 GpuVendorToString(gpu.vendor), gpu.model_name);
     }
   }
-  std::cout << "--------------------------------------------------\n";
-  std::cout.flush();
-  std::cin.get();
 }
 
 std::string PlatformDetector::DetectOS() {

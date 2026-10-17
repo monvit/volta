@@ -2,9 +2,9 @@
 
 #include <chrono>
 #include <csignal>
-#include <iostream>
 
 #include "imessage_handler.h"
+#include "logger/logger.h"
 
 extern volatile sig_atomic_t g_running;
 
@@ -13,9 +13,11 @@ namespace agent {
 namespace client {
 
 ConnectReactor::ConnectReactor(IMessageHandler* handler, const std::string& id,
-                               ::volta::VoltaCollector::Stub* stub)
-    : handler_(handler) {
-  std::cout << "Starting ConnectReactor for agent " << id << std::endl;
+                               ::volta::VoltaCollector::Stub* stub,
+                               std::unique_ptr<logging::Logger> logger)
+    : handler_(handler), logger_(std::move(logger)), id_(id) {
+  logger_->Log(logging::LogLevel::INFO_LEVEL,
+               "Starting ConnectReactor for agent {}", id);
 
   context_.AddMetadata("agent-id", id);
   stub->async()->Connect(&context_, this);
@@ -28,7 +30,8 @@ ConnectReactor::ConnectReactor(IMessageHandler* handler, const std::string& id,
 
 void ConnectReactor::OnWriteDone(bool ok) {
   if (!ok) {
-    std::cerr << "Write failed" << std::endl;
+    logger_->Log(logging::LogLevel::ERROR_LEVEL,
+                 "ConnectReactor write failed for agent {}", id_);
     return;
   }
 
@@ -36,22 +39,22 @@ void ConnectReactor::OnWriteDone(bool ok) {
 
   writerqu_.pop();
   writing_ = false;
-  std::cout << "[" << std::chrono::system_clock::now() << "]"
-            << " Finished writing message to server, queue size: "
-            << writerqu_.size() << std::endl;
+  logger_->Log(logging::LogLevel::DEBUG_LEVEL,
+               "Finished writing message to server, queue size: {}",
+               writerqu_.size());
 
   Write();
 }
 
 void ConnectReactor::OnReadDone(bool ok) {
   if (!ok) {
-    std::cerr << "Read failed" << std::endl;
+    logger_->Log(logging::LogLevel::ERROR_LEVEL,
+                 "ConnectReactor read failed for agent {}", id_);
     return;
   }
 
-  std::cout << "[" << std::chrono::system_clock::now() << "]"
-            << " Message from server: "
-            << ::volta::MessageType_Name(res_.type()) << std::endl;
+  logger_->Log(logging::LogLevel::DEBUG_LEVEL, "Message from server: {}",
+               ::volta::MessageType_Name(res_.type()));
   handler_->OnMessage(res_);
   StartRead(&res_);
 }
@@ -76,9 +79,9 @@ grpc::Status ConnectReactor::Await() {
 }
 
 void ConnectReactor::EnqueueWrite(::volta::ControlMessage msg) {
-  std::cout << "[" << std::chrono::system_clock::now() << "]"
-            << " Enqueuing message to server: "
-            << ::volta::MessageType_Name(msg.type()) << std::endl;
+  logger_->Log(logging::LogLevel::DEBUG_LEVEL,
+               "Enqueuing message to server: {}",
+               ::volta::MessageType_Name(msg.type()));
 
   std::lock_guard l(mu_);
 
@@ -92,9 +95,9 @@ void ConnectReactor::Write() {
     return;
   }
 
-  std::cout << "[" << std::chrono::system_clock::now() << "]"
-            << " Starting write of message to server: "
-            << ::volta::MessageType_Name(writerqu_.front().type()) << std::endl;
+  logger_->Log(logging::LogLevel::DEBUG_LEVEL,
+               "Starting write of message to server: {}",
+               ::volta::MessageType_Name(writerqu_.front().type()));
 
   writing_ = true;
   auto& msg = writerqu_.front();
