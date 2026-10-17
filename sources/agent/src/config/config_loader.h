@@ -35,6 +35,7 @@ class ConfigLoader {
   static void LoadServerPort(toml::table& tbl, Config& out_config);
   static void LoadMetrics(toml::table& tbl, Config& out_config);
   static void LoadTimeWindow(toml::table& tbl, Config& out_config);
+  static void LoadLogging(toml::table& tbl, Config& out_config);
   static void CheckKeys(toml::table& tbl);
 
   static std::unique_ptr<logging::Logger> logger_;

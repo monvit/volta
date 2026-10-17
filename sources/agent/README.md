@@ -86,6 +86,10 @@ You can use `sources/agent/agent.example.conf` as a starting point.
   Metric names may be written with or without the `METRIC_TYPE_` prefix.
 - `time_window` — buffering window in seconds (`float`), and it must be
   greater than the collection interval.
+- `log_level` — minimum log level: `trace` (or `noisy`), `debug`, `info`,
+  `warning` (or `warn`), or `error`. Defaults to `info`.
+- `log_file` — optional path to the log file. If omitted, logs are written to
+  stderr.
 
 ### Example
 
@@ -95,6 +99,8 @@ interval = 500
 server_address = "localhost"
 server_port = 5000
 time_window = 2.0
+log_level = "info"
+# log_file = "/var/log/volta/agent.log"
 
 metrics = [
   "METRIC_TYPE_CPU_POWER_PACKAGE",

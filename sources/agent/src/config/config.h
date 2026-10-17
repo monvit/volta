@@ -9,7 +9,9 @@
 #include <chrono>
 #include <cstdint>
 #include <cstring>
+#include <filesystem>
 #include <map>
+#include <optional>
 #include <sstream>
 #include <string>
 #include <thread>
@@ -67,6 +69,8 @@ struct Config {
   std::chrono::milliseconds buffered_time_window =
       std::chrono::milliseconds(kDefaultTimeWindowMs);
   std::filesystem::path dump_dir = kDefaultDumpPath;
+  logging::LogLevel log_level = logging::LogLevel::INFO_LEVEL;
+  std::optional<std::filesystem::path> log_file;
 };
 
 }  // namespace config

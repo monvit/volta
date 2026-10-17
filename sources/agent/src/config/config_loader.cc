@@ -4,6 +4,7 @@
 #include <spdlog/sinks/stdout_color_sinks.h>
 
 #include <algorithm>
+#include <cctype>
 #include <cerrno>
 #include <chrono>
 #include <cstdint>
@@ -22,8 +23,8 @@ namespace config {
 using logging::LogLevel;
 
 std::set<std::string_view, std::less<>> ConfigLoader::kValidTopLevelKeys = {
-    "core_affinity", "interval", "server_address",
-    "server_port",   "metrics",  "time_window"};
+    "core_affinity", "interval",    "server_address", "server_port",
+    "metrics",       "time_window", "log_level",      "log_file"};
 
 // What logger should be used before config is parsed?
 // stderr logger seems like a sane fallback
@@ -119,6 +120,7 @@ void ConfigLoader::LoadConfigFile(const std::filesystem::path& path,
     LoadServerAddress(tbl, out_config);
     LoadServerPort(tbl, out_config);
     LoadMetrics(tbl, out_config);
+    LoadLogging(tbl, out_config);
     CheckKeys(tbl);
   } catch (const toml::parse_error& err) {
     logger_->Log(LogLevel::ERROR_LEVEL, "Parsing Agent config failed: {} at {}",
@@ -318,6 +320,42 @@ void ConfigLoader::LoadTimeWindow(toml::table& tbl, Config& out_config) {
                  "time_window has an incorrect type or value, use number "
                  "larger than collection interval ({}s)",
                  (float_t)out_config.collection_interval.count() / 1000.0);
+  }
+}
+
+void ConfigLoader::LoadLogging(toml::table& tbl, Config& out_config) {
+  if (auto level = tbl["log_level"].value<std::string>()) {
+    std::string normalized = *level;
+    std::transform(normalized.begin(), normalized.end(), normalized.begin(),
+                   [](unsigned char c) { return std::tolower(c); });
+    if (normalized == "trace" || normalized == "noisy") {
+      out_config.log_level = logging::LogLevel::NOISY_LEVEL;
+    } else if (normalized == "debug") {
+      out_config.log_level = logging::LogLevel::DEBUG_LEVEL;
+    } else if (normalized == "info") {
+      out_config.log_level = logging::LogLevel::INFO_LEVEL;
+    } else if (normalized == "warn" || normalized == "warning") {
+      out_config.log_level = logging::LogLevel::WARNING_LEVEL;
+    } else if (normalized == "error") {
+      out_config.log_level = logging::LogLevel::ERROR_LEVEL;
+    } else {
+      logger_->Log(LogLevel::ERROR_LEVEL,
+                   "Invalid log_level '{}'; using default level", *level);
+    }
+  } else if (tbl.contains("log_level")) {
+    logger_->Log(LogLevel::ERROR_LEVEL,
+                 "Invalid log_level type; expected a string");
+  }
+
+  if (auto path = tbl["log_file"].value<std::string>()) {
+    if (path->empty()) {
+      out_config.log_file.reset();
+    } else {
+      out_config.log_file = std::filesystem::path(*path);
+    }
+  } else if (tbl.contains("log_file")) {
+    logger_->Log(LogLevel::ERROR_LEVEL,
+                 "Invalid log_file type; expected a string");
   }
 }
 
