@@ -5,31 +5,33 @@
 #include <sched.h>
 #include <unistd.h>
 
+#include <cerrno>
+#include <cstring>
 #include <iomanip>
-#include <iostream>
 #include <random>
+#include <sstream>
 
 namespace volta {
 namespace agent {
 namespace utils {
 
-void PrintCurrentAffinity() {
+void PrintCurrentAffinity(logging::Logger& logger) {
   cpu_set_t set;
   CPU_ZERO(&set);
 
   if (sched_getaffinity(0, sizeof(set), &set) != 0) {
-    // TODO: Log
-    perror("sched_getaffinity");
+    logger.Log(logging::LogLevel::ERROR_LEVEL, "sched_getaffinity failed: {}",
+               std::strerror(errno));
     return;
   }
 
   long max_cpus = sysconf(_SC_NPROCESSORS_CONF);
-  std::cout << "Current CPU affinity: ";
-
+  std::ostringstream affinity;
   for (int i = 0; i < max_cpus; ++i) {
-    if (CPU_ISSET(i, &set)) std::cout << i << " ";
+    if (CPU_ISSET(i, &set)) affinity << i << " ";
   }
-  std::cout << "\n";
+  logger.Log(logging::LogLevel::INFO_LEVEL, "Current CPU affinity: {}",
+             affinity.str());
 }
 
 bool IsValidIP(const std::string& ip) {

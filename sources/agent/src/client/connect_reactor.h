@@ -6,6 +6,7 @@
 #include <queue>
 
 #include "iwriter.h"
+#include "logger/logger.h"
 #include "volta.grpc.pb.h"
 
 namespace volta {
@@ -20,12 +21,8 @@ class ConnectReactor final
       public IWriter<::volta::ControlMessage> {
  public:
   explicit ConnectReactor(IMessageHandler* handler, const std::string& id,
-                          ::volta::VoltaCollector::Stub* stub);
-  ~ConnectReactor() override {
-    std::cout << "ConnectReactor destroyed for agent "
-              << context_.GetServerInitialMetadata().find("agent-id")->second
-              << std::endl;
-  }
+                          ::volta::VoltaCollector::Stub* stub,
+                          std::unique_ptr<logging::Logger> logger);
 
   // ClientBidiReactor
   void OnWriteDone(bool ok) override;
@@ -43,7 +40,8 @@ class ConnectReactor final
   void Write() override;  // IWriter
 
   IMessageHandler* handler_;
-  ::volta::VoltaCollector::Stub* stub_;
+  std::unique_ptr<logging::Logger> logger_;
+  std::string id_;
   grpc::ClientContext context_;
 
   ::volta::ControlMessage res_;

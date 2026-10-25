@@ -1,25 +1,36 @@
 #include "config/config_loader.h"
 
 #include <sched.h>
+#include <spdlog/sinks/stdout_color_sinks.h>
 
 #include <algorithm>
+#include <cctype>
+#include <cerrno>
 #include <chrono>
 #include <cstdint>
+#include <cstring>
 #include <filesystem>
 #include <fstream>
-#include <iostream>
 #include <string>
 
 #include "config_loader.h"
+#include "logger/spdlog_logger.h"
 #include "utils/utils.h"
 
 namespace volta {
 namespace agent {
 namespace config {
+using logging::LogLevel;
 
 std::set<std::string_view, std::less<>> ConfigLoader::kValidTopLevelKeys = {
-    "core_affinity", "interval", "server_address",
-    "server_port",   "metrics",  "time_window"};
+    "core_affinity", "interval",    "server_address", "server_port",
+    "metrics",       "time_window", "log_level"};
+
+// What logger should be used before config is parsed?
+// stderr logger seems like a sane fallback
+std::unique_ptr<logging::Logger> ConfigLoader::logger_ =
+    std::make_unique<logging::SpdlogLogger>(
+        spdlog::stderr_color_mt("Config Loader"));
 
 Config ConfigLoader::LoadConfig(
     const std::optional<std::filesystem::path>& file) {
@@ -95,15 +106,26 @@ bool AddRange(cpu_set_t& set, unsigned int from, unsigned int to,
 
 void ConfigLoader::LoadConfigFile(const std::filesystem::path& path,
                                   Config& out_config) {
+  if (!std::filesystem::exists(path)) {
+    logger_->Log(LogLevel::ERROR_LEVEL,
+                 "Agent config file not found, loading default settings.");
+    return;
+  }
   toml::table tbl = toml::parse_file(path.string());
 
-  LoadCoreAffinity(tbl, out_config);
-  LoadInterval(tbl, out_config);
-  LoadTimeWindow(tbl, out_config);
-  LoadServerAddress(tbl, out_config);
-  LoadServerPort(tbl, out_config);
-  LoadMetrics(tbl, out_config);
-  CheckKeys(tbl);
+  try {
+    LoadCoreAffinity(tbl, out_config);
+    LoadInterval(tbl, out_config);
+    LoadTimeWindow(tbl, out_config);
+    LoadServerAddress(tbl, out_config);
+    LoadServerPort(tbl, out_config);
+    LoadMetrics(tbl, out_config);
+    LoadLogging(tbl, out_config);
+    CheckKeys(tbl);
+  } catch (const toml::parse_error& err) {
+    logger_->Log(LogLevel::ERROR_LEVEL, "Parsing Agent config failed: {} at {}",
+                 err.description(), err.source().begin.line);
+  }
 }
 
 void ConfigLoader::LoadCoreAffinity(toml::table& tbl, Config& out_config) {
@@ -125,7 +147,8 @@ void ConfigLoader::LoadCoreAffinity(toml::table& tbl, Config& out_config) {
       // liczba CPU
       if (auto cpu = item.value<unsigned int>()) {
         if (!AddCpu(mask, *cpu, max_cpu)) {
-          std::cerr << "CPU index out of range: " << *cpu << "\n";
+          logger_->Log(LogLevel::ERROR_LEVEL, "CPU index out of range: {}",
+                       *cpu);
           return;
         }
       }
@@ -134,27 +157,30 @@ void ConfigLoader::LoadCoreAffinity(toml::table& tbl, Config& out_config) {
         unsigned int from, to;
         if (sscanf(str->c_str(), "%u-%u", &from, &to) == 2) {
           if (!AddRange(mask, from, to, max_cpu)) {
-            std::cerr << "Invalid CPU range: " << *str << "\n";
+            logger_->Log(LogLevel::ERROR_LEVEL, "Invalid CPU range: {}", *str);
             return;
           }
         } else {
-          std::cerr << "Invalid core_affinity entry: " << *str << "\n";
+          logger_->Log(LogLevel::ERROR_LEVEL, "Invalid core_affinity entry: {}",
+                       *str);
           return;
         }
       } else {
-        std::cerr << "Invalid core_affinity element type\n";
+        logger_->Log(LogLevel::ERROR_LEVEL,
+                     "Invalid core_affinity element type");
         return;
       }
     }
     if (sched_setaffinity(0, sizeof(cpu_set_t), &mask) == -1) {
-      perror("sched_setaffinity");
+      logger_->Log(LogLevel::ERROR_LEVEL, "sched_setaffinity failed: {}",
+                   std::strerror(errno));
     } else {
-      std::cout << "Successfully set CPU affinity mask." << std::endl;
+      logger_->Log(LogLevel::INFO_LEVEL, "Successfully set CPU affinity mask.");
     }
 
     out_config.core_affinity = mask;
   } else {
-    std::cerr << "Invalid core_affinity value\n";
+    logger_->Log(LogLevel::ERROR_LEVEL, "Invalid core_affinity value");
   }
 }
 
@@ -165,10 +191,11 @@ void ConfigLoader::LoadInterval(toml::table& tbl, Config& out_config) {
 
   if (auto ms = val.value<uint32_t>()) {
     out_config.collection_interval = std::chrono::milliseconds(*ms);
-    std::cout << "Collection Interval set to: "
-              << out_config.collection_interval << std::endl;
+    logger_->Log(LogLevel::INFO_LEVEL, "Collection Interval set to: {}",
+                 out_config.collection_interval);
   } else {
-    std::cerr << "Invalid interval value type, use uint32" << std::endl;
+    logger_->Log(LogLevel::ERROR_LEVEL,
+                 "Invalid interval value type, use uint32");
   }
 }
 
@@ -180,12 +207,13 @@ void ConfigLoader::LoadServerAddress(toml::table& tbl, Config& out_config) {
   if (auto str = val.value<std::string>()) {
     if (utils::IsValidIP(*str) || utils::IsResolvable(*str)) {
       out_config.server_address = *str;
-      std::cout << "Server Address set to " << *str << std::endl;
+      logger_->Log(LogLevel::INFO_LEVEL, "Server Address set to {}", *str);
     } else {
-      std::cerr << "Invalid server_address format" << std::endl;
+      logger_->Log(LogLevel::ERROR_LEVEL, "Invalid server_address format");
     }
   } else {
-    std::cerr << "Invalid server_address value type, use string" << std::endl;
+    logger_->Log(LogLevel::ERROR_LEVEL,
+                 "Invalid server_address value type, use string");
   }
 }
 
@@ -196,12 +224,11 @@ void ConfigLoader::LoadServerPort(toml::table& tbl, Config& out_config) {
 
   if (auto port = val.value<uint16_t>(); port && *port > 0) {
     out_config.server_port = *port;
-    std::cout << "Server port set to " << *port << std::endl;
+    logger_->Log(LogLevel::INFO_LEVEL, "Server port set to {}", *port);
   } else {
-    std::cerr << "server_port has an incorrect type or value, use number "
-                 "from range "
-                 "[1, 65535]"
-              << std::endl;
+    logger_->Log(LogLevel::ERROR_LEVEL,
+                 "server_port has an incorrect type or value, use number  from "
+                 "range [1, 65535]");
   }
 }
 
@@ -233,7 +260,8 @@ void ConfigLoader::LoadMetrics(toml::table& tbl, Config& out_config) {
     for (const auto& item : *arr) {
       if (auto metric_num = item.value<int>()) {
         if (!MetricType_IsValid(*metric_num)) {
-          std::cerr << "Invalid metric value: " << *metric_num << std::endl;
+          logger_->Log(LogLevel::ERROR_LEVEL, "Invalid metric value: {}",
+                       *metric_num);
           continue;
         }
         append_metric(static_cast<MetricType>(*metric_num));
@@ -243,32 +271,34 @@ void ConfigLoader::LoadMetrics(toml::table& tbl, Config& out_config) {
       if (auto metric_name = item.value<std::string>()) {
         MetricType metric;
         if (!parse_metric_name(*metric_name, metric)) {
-          std::cerr << "Invalid metric name: " << *metric_name << std::endl;
+          logger_->Log(LogLevel::ERROR_LEVEL, "Invalid metric name: {}",
+                       *metric_name);
           continue;
         }
         append_metric(metric);
         continue;
       }
 
-      std::cerr << "Invalid metric entry type" << std::endl;
+      logger_->Log(LogLevel::ERROR_LEVEL, "Invalid metric entry type");
     }
   } else if (auto val = metrics_node.value<std::string>()) {
     MetricType metric;
     if (parse_metric_name(*val, metric)) {
       append_metric(metric);
     } else {
-      std::cerr << "Invalid metric name: " << *val << std::endl;
+      logger_->Log(LogLevel::ERROR_LEVEL, "Invalid metric name: {}", *val);
     }
   } else {
-    std::cerr << "Invalid metrics value, use array of strings or numbers"
-              << std::endl;
+    logger_->Log(LogLevel::ERROR_LEVEL,
+                 "Invalid metrics value, use array of strings or numbers");
     return;
   }
 
   if (!metrics.empty()) {
     out_config.requestedMetrics = std::move(metrics);
-    std::cout << "Requested metrics updated to "
-              << out_config.requestedMetrics.size() << " entries" << std::endl;
+    logger_->Log(LogLevel::INFO_LEVEL,
+                 "Requested metrics updated to {} entries",
+                 out_config.requestedMetrics.size());
   }
 }
 
@@ -284,19 +314,45 @@ void ConfigLoader::LoadTimeWindow(toml::table& tbl, Config& out_config) {
       (*window * 1000) > (float)out_config.collection_interval.count()) {
     out_config.buffered_time_window =
         std::chrono::milliseconds((uint32_t)(*window * 1000));
-    std::cout << "Time window set to " << *window << std::endl;
+    logger_->Log(LogLevel::INFO_LEVEL, "Time window set to {}", *window);
   } else {
-    std::cerr << "time_window has an incorrect type or value, use number "
-                 "larger than collection interval ("
-              << (float_t)out_config.collection_interval.count() / 1000.0
-              << "s)" << std::endl;
+    logger_->Log(LogLevel::ERROR_LEVEL,
+                 "time_window has an incorrect type or value, use number "
+                 "larger than collection interval ({}s)",
+                 (float_t)out_config.collection_interval.count() / 1000.0);
+  }
+}
+
+void ConfigLoader::LoadLogging(toml::table& tbl, Config& out_config) {
+  if (auto level = tbl["log_level"].value<std::string>()) {
+    std::string normalized = *level;
+    std::transform(normalized.begin(), normalized.end(), normalized.begin(),
+                   [](unsigned char c) { return std::tolower(c); });
+    if (normalized == "trace" || normalized == "noisy") {
+      out_config.log_level = logging::LogLevel::NOISY_LEVEL;
+    } else if (normalized == "debug") {
+      out_config.log_level = logging::LogLevel::DEBUG_LEVEL;
+    } else if (normalized == "info") {
+      out_config.log_level = logging::LogLevel::INFO_LEVEL;
+    } else if (normalized == "warn" || normalized == "warning") {
+      out_config.log_level = logging::LogLevel::WARNING_LEVEL;
+    } else if (normalized == "error") {
+      out_config.log_level = logging::LogLevel::ERROR_LEVEL;
+    } else {
+      logger_->Log(LogLevel::ERROR_LEVEL,
+                   "Invalid log_level '{}'; using default level", *level);
+    }
+  } else if (tbl.contains("log_level")) {
+    logger_->Log(LogLevel::ERROR_LEVEL,
+                 "Invalid log_level type; expected a string");
   }
 }
 
 void ConfigLoader::CheckKeys(toml::table& tbl) {
   for (auto&& [key, value] : tbl) {
     if (!kValidTopLevelKeys.contains(key.str())) {
-      std::cout << "Key '" << key << "' is not a valid key\n";
+      logger_->Log(LogLevel::INFO_LEVEL, "Key '{}' is not a valid key",
+                   key.str());
     }
   }
 }

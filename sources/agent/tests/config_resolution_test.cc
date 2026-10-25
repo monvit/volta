@@ -9,6 +9,7 @@
 #include <optional>
 #include <string>
 
+#include "config/config_loader.h"
 #include "gtest/gtest.h"
 
 namespace volta {
@@ -96,6 +97,15 @@ class ConfigResolutionTest : public ::testing::Test {
   std::filesystem::path system_path_{tmp_.path() / "etc-volta-agent.conf"};
   std::optional<std::string> saved_env_;
 };
+
+TEST_F(ConfigResolutionTest, LoadsLoggingOptions) {
+  const auto log_path = tmp_.path() / "agent.log";
+  const auto config_path =
+      WriteFile(tmp_.path(), "logging.conf", "log_level = \"debug\"\n");
+
+  const auto loaded = ConfigLoader::LoadConfig(config_path);
+  EXPECT_EQ(loaded.log_level, logging::LogLevel::DEBUG_LEVEL);
+}
 
 TEST_F(ConfigResolutionTest, ParseCli) {
   const char* argv1[] = {"prog", "--config", "/a.conf"};

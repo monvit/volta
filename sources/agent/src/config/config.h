@@ -3,36 +3,40 @@
 
 #include <metric.h>
 #include <sched.h>
+#include <unistd.h>
 
+#include <cerrno>
 #include <chrono>
 #include <cstdint>
-#include <iostream>
-#include <map>
+#include <cstring>
+#include <filesystem>
+#include <sstream>
 #include <string>
-#include <thread>
+
+#include "logger/logger.h"
 
 namespace volta {
 namespace agent {
 namespace config {
 
 struct Config {
-  void PrintCurrentAffinity() {
+  void PrintCurrentAffinity(logging::Logger& logger) {
     cpu_set_t set;
     CPU_ZERO(&set);
 
     if (sched_getaffinity(0, sizeof(set), &set) != 0) {
-      // TODO: Log
-      perror("sched_getaffinity");
+      logger.Log(logging::LogLevel::ERROR_LEVEL, "sched_getaffinity failed: {}",
+                 std::strerror(errno));
       return;
     }
 
     long max_cpus = sysconf(_SC_NPROCESSORS_CONF);
-    std::cout << "Current CPU affinity: ";
-
+    std::ostringstream affinity;
     for (int i = 0; i < max_cpus; ++i) {
-      if (CPU_ISSET(i, &set)) std::cout << i << " ";
+      if (CPU_ISSET(i, &set)) affinity << i << " ";
     }
-    std::cout << "\n";
+    logger.Log(logging::LogLevel::INFO_LEVEL, "Current CPU affinity: {}",
+               affinity.str());
   }
   // TODO: move this initialization logic to the ConfigLoader's
   // LoadDefaultConfig method
@@ -62,6 +66,7 @@ struct Config {
   std::chrono::milliseconds buffered_time_window =
       std::chrono::milliseconds(kDefaultTimeWindowMs);
   std::filesystem::path dump_dir = kDefaultDumpPath;
+  logging::LogLevel log_level = logging::LogLevel::INFO_LEVEL;
 };
 
 }  // namespace config
