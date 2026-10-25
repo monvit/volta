@@ -8,6 +8,7 @@
 #include <cerrno>
 #include <chrono>
 #include <cstdint>
+#include <cstdlib>
 #include <cstring>
 #include <filesystem>
 #include <sstream>
@@ -45,6 +46,9 @@ struct Config {
   static constexpr char const* kDefaultServerAddress = "localhost";
   static constexpr const char* kDefaultDumpPath = "/var/lib/volta/dumps";
   static constexpr uint16_t kDefaultServerPort = 5000;
+  static constexpr const char* kDefaultLogPattern =
+      "[%Y/%m/%d %H:%M:%S.%e] [%^%l%$] [%n] %v";
+  static constexpr const char* kJournalctlLogPattern = "[%l] [%n] %v";
   static inline cpu_set_t kDefaultAffinity = [] {
     cpu_set_t mask;
     CPU_ZERO(&mask);
@@ -67,7 +71,19 @@ struct Config {
       std::chrono::milliseconds(kDefaultTimeWindowMs);
   std::filesystem::path dump_dir = kDefaultDumpPath;
   logging::LogLevel log_level = logging::LogLevel::INFO_LEVEL;
+  std::string log_pattern = kDefaultLogPattern;
 };
+
+inline bool IsSystemdServiceMode() {
+  const char* invocation_id = std::getenv("INVOCATION_ID");
+  return invocation_id != nullptr && invocation_id[0] != '\0';
+}
+
+inline void ConfigureSystemdLogging(Config& config) {
+  if (IsSystemdServiceMode()) {
+    config.log_pattern = Config::kJournalctlLogPattern;
+  }
+}
 
 }  // namespace config
 }  // namespace agent

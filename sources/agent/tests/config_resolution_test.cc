@@ -78,7 +78,11 @@ class ConfigResolutionTest : public ::testing::Test {
     if (const char* v = std::getenv(kConfigEnvVar)) {
       saved_env_ = v;
     }
+    if (const char* v = std::getenv("INVOCATION_ID")) {
+      saved_invocation_id_ = v;
+    }
     unsetenv(kConfigEnvVar);
+    unsetenv("INVOCATION_ID");
   }
 
   void TearDown() override {
@@ -86,6 +90,11 @@ class ConfigResolutionTest : public ::testing::Test {
       setenv(kConfigEnvVar, saved_env_->c_str(), 1);
     } else {
       unsetenv(kConfigEnvVar);
+    }
+    if (saved_invocation_id_) {
+      setenv("INVOCATION_ID", saved_invocation_id_->c_str(), 1);
+    } else {
+      unsetenv("INVOCATION_ID");
     }
   }
 
@@ -96,14 +105,28 @@ class ConfigResolutionTest : public ::testing::Test {
   TempDir tmp_{"volta-config-test"};
   std::filesystem::path system_path_{tmp_.path() / "etc-volta-agent.conf"};
   std::optional<std::string> saved_env_;
+  std::optional<std::string> saved_invocation_id_;
 };
 
 TEST_F(ConfigResolutionTest, LoadsLoggingOptions) {
+  const auto log_path = tmp_.path() / "agent.log";
   const auto config_path =
       WriteFile(tmp_.path(), "logging.conf", "log_level = \"debug\"\n");
 
   const auto loaded = ConfigLoader::LoadConfig(config_path);
   EXPECT_EQ(loaded.log_level, logging::LogLevel::DEBUG_LEVEL);
+}
+
+TEST_F(ConfigResolutionTest, UsesJournalCompatiblePatternInSystemdService) {
+  Config config;
+  EXPECT_FALSE(IsSystemdServiceMode());
+  ConfigureSystemdLogging(config);
+  EXPECT_EQ(config.log_pattern, Config::kDefaultLogPattern);
+
+  ASSERT_EQ(setenv("INVOCATION_ID", "test-invocation", 1), 0);
+  EXPECT_TRUE(IsSystemdServiceMode());
+  ConfigureSystemdLogging(config);
+  EXPECT_EQ(config.log_pattern, Config::kJournalctlLogPattern);
 }
 
 TEST_F(ConfigResolutionTest, ParseCli) {

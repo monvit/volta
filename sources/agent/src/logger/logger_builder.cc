@@ -1,6 +1,7 @@
 #include "logger/logger_builder.h"
 
 #include <spdlog/logger.h>
+#include <spdlog/sinks/basic_file_sink.h>
 #include <spdlog/sinks/stdout_color_sinks.h>
 
 #include <memory>
@@ -17,6 +18,7 @@ std::unique_ptr<Logger> BuildLogger(const config::Config& config,
   sink = std::make_shared<spdlog::sinks::stderr_color_sink_mt>();
 
   auto backend = std::make_shared<spdlog::logger>(logger_name, sink);
+  backend->set_pattern(config.log_pattern);
   auto logger = std::make_unique<SpdlogLogger>(backend);
   logger->SetLevel(config.log_level);
   return logger;

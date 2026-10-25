@@ -61,9 +61,11 @@ int cli_mode(int argc, const char* argv[]) {
 }
 
 int agent_mode(int argc, const char* const* argv) {
-  config::Config default_config;
-  auto logger = logging::BuildLogger(default_config);
+  config::Config bootstrap_config{.log_level = LogLevel::NOISY_LEVEL};
+  config::ConfigureSystemdLogging(bootstrap_config);
+  auto logger = logging::BuildLogger(bootstrap_config);
 
+  config::Config default_config;
   auto cli = config::ParseCli(argc, argv);
   if (!cli) {
     logger->Log(LogLevel::ERROR_LEVEL, "Invalid arguments (try --help)");
@@ -85,16 +87,8 @@ int agent_mode(int argc, const char* const* argv) {
   install_signal_handlers();
   try {
     auto agent_config = config::ConfigLoader::LoadConfig(resolved.path);
+    config::ConfigureSystemdLogging(agent_config);
     logger = logging::BuildLogger(agent_config);
-
-    if (resolved.source == config::ConfigSource::kBuiltinDefaults) {
-      logger->Log(LogLevel::INFO_LEVEL, "Config source: {}",
-                  config::ConfigSourceToString(resolved.source));
-    } else {
-      logger->Log(LogLevel::INFO_LEVEL, "Config source: {} ({})",
-                  config::ConfigSourceToString(resolved.source),
-                  resolved.path->string());
-    }
 
     collectors::CollectorRegistry::Instance().SetLoggers(*logger);
 
