@@ -48,6 +48,7 @@ class ControlSocket {
 
  private:
   void CloseFd();
+  void CloseLockFd();
   void BindServer();
   bool EnsureClientConnected(int* err_out);
   void RecvLoop();
@@ -56,6 +57,7 @@ class ControlSocket {
   Role role_;
   Options opts_;
   int fd_ = -1;
+  int lock_fd_ = -1;
   bool connected_ = false;
   bool owns_path_ = false;
   MessageHandler handler_;

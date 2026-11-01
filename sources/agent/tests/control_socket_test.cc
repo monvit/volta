@@ -105,8 +105,41 @@ TEST_F(ControlSocketTest, SocketModeIs0660AndUnlinks) {
     EXPECT_EQ(st.st_mode & 0777, 0660);
   }
   EXPECT_FALSE(std::filesystem::exists(path));
+  EXPECT_TRUE(
+      std::filesystem::exists(std::filesystem::path(path.string() + ".lock")));
   ControlSocket again(path.string(), ControlSocket::Role::kServer);
   EXPECT_TRUE(std::filesystem::is_socket(path));
+}
+
+TEST_F(ControlSocketTest, SecondServerOnSamePathThrowsAlreadyRunning) {
+  auto path = (dir_ / "control.sock").string();
+  ControlSocket server(path, ControlSocket::Role::kServer);
+
+  std::mutex mu;
+  std::condition_variable cv;
+  std::optional<ControlCommand> got;
+  server.Listen([&](std::string_view message) {
+    std::lock_guard lock(mu);
+    got = Decode(message);
+    cv.notify_one();
+  });
+
+  try {
+    ControlSocket overlapping(path, ControlSocket::Role::kServer);
+    FAIL() << "expected second server to throw";
+  } catch (const std::runtime_error& err) {
+    EXPECT_NE(std::string(err.what()).find("already running"),
+              std::string::npos);
+  }
+
+  ControlSocket client(path, ControlSocket::Role::kClient);
+  int err = 0;
+  ASSERT_TRUE(client.Send(Encode(DumpEnd{}), &err)) << DescribeSendError(err);
+
+  std::unique_lock lock(mu);
+  ASSERT_TRUE(cv.wait_for(lock, std::chrono::seconds(2),
+                          [&] { return got.has_value(); }));
+  EXPECT_TRUE(std::holds_alternative<DumpEnd>(*got));
 }
 
 TEST_F(ControlSocketTest, MissingSocketSaysServiceDown) {

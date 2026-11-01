@@ -193,7 +193,7 @@ if(GIT_EXE)
         OUTPUT_VARIABLE GIT_ROOT
         OUTPUT_STRIP_TRAILING_WHITESPACE
     )
-    if(EXISTS ${GIT_ROOT}/.git)
+    if(IS_DIRECTORY ${GIT_ROOT}/.git)
         configure_file(
             ${GIT_ROOT}/scripts/hooks/pre-commit
             ${GIT_ROOT}/.git/hooks/pre-commit

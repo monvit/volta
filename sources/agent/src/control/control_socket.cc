@@ -2,6 +2,7 @@
 
 #include <fcntl.h>
 #include <poll.h>
+#include <sys/file.h>
 #include <sys/socket.h>
 #include <sys/stat.h>
 #include <sys/un.h>
@@ -92,6 +93,7 @@ ControlSocket::~ControlSocket() {
                 << "): " << std::strerror(errno) << "\n";
     }
   }
+  CloseLockFd();
 }
 
 void ControlSocket::CloseFd() {
@@ -102,10 +104,37 @@ void ControlSocket::CloseFd() {
   connected_ = false;
 }
 
+void ControlSocket::CloseLockFd() {
+  if (lock_fd_ >= 0) {
+    ::close(lock_fd_);
+    lock_fd_ = -1;
+  }
+}
+
 void ControlSocket::BindServer() {
+  const std::string lock_path = path_ + ".lock";
+  lock_fd_ = ::open(lock_path.c_str(), O_CREAT | O_RDWR | O_CLOEXEC, 0660);
+  if (lock_fd_ < 0) {
+    int saved = errno;
+    CloseFd();
+    throw std::runtime_error(std::string("open(") + lock_path +
+                             "): " + std::strerror(saved));
+  }
+  if (::flock(lock_fd_, LOCK_EX | LOCK_NB) != 0) {
+    int saved = errno;
+    CloseLockFd();
+    CloseFd();
+    if (saved == EWOULDBLOCK || saved == EAGAIN) {
+      throw std::runtime_error("control socket already running");
+    }
+    throw std::runtime_error(std::string("flock(") + lock_path +
+                             "): " + std::strerror(saved));
+  }
+
   // Stale inode from a crashed non-systemd run. Harmless if absent.
   if (::unlink(path_.c_str()) != 0 && errno != ENOENT) {
     int saved = errno;
+    CloseLockFd();
     CloseFd();
     throw std::runtime_error(std::string("unlink(") + path_ +
                              "): " + std::strerror(saved));
@@ -125,6 +154,7 @@ void ControlSocket::BindServer() {
     bind_errno = errno;
   }
   if (bind_rc != 0) {
+    CloseLockFd();
     CloseFd();
     throw std::runtime_error(std::string("bind(") + path_ +
                              "): " + std::strerror(bind_errno));
@@ -133,6 +163,7 @@ void ControlSocket::BindServer() {
 
   if (::chmod(path_.c_str(), opts_.mode) != 0) {
     int saved = errno;
+    CloseLockFd();
     CloseFd();
     ::unlink(path_.c_str());
     owns_path_ = false;
