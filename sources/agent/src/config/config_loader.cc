@@ -109,17 +109,20 @@ void ConfigLoader::LoadConfigFile(const std::filesystem::path& path,
   try {
     toml::table tbl = toml::parse_file(path.string());
 
+    LoadLogging(tbl, out_config);
+    logger_->SetLevel(out_config.log_level);
+
     LoadCoreAffinity(tbl, out_config);
     LoadInterval(tbl, out_config);
     LoadTimeWindow(tbl, out_config);
     LoadServerAddress(tbl, out_config);
     LoadServerPort(tbl, out_config);
     LoadMetrics(tbl, out_config);
-    LoadLogging(tbl, out_config);
     CheckKeys(tbl);
   } catch (const toml::parse_error& err) {
-    logger_->Log(LogLevel::ERROR_LEVEL, "Parsing Agent config failed: {} at {}",
-                 err.description(), err.source().begin.line);
+    logger_->Log(LogLevel::ERROR_LEVEL,
+                 "Parsing Agent config failed: {} at {} ({})",
+                 err.description(), err.source().begin.line, path.string());
     throw;
   }
 }
@@ -347,7 +350,7 @@ void ConfigLoader::LoadLogging(toml::table& tbl, Config& out_config) {
 void ConfigLoader::CheckKeys(toml::table& tbl) {
   for (auto&& [key, value] : tbl) {
     if (!kValidTopLevelKeys.contains(key.str())) {
-      logger_->Log(LogLevel::INFO_LEVEL, "Key '{}' is not a valid key",
+      logger_->Log(LogLevel::WARNING_LEVEL, "Key '{}' is not a valid key",
                    key.str());
     }
   }

@@ -82,19 +82,19 @@ int agent_mode(int argc, const char* const* argv) {
     return 1;
   }
 
-  if (resolved.source == config::ConfigSource::kBuiltinDefaults) {
-    logger->Log(LogLevel::INFO_LEVEL, "Config source: {}",
-                config::ConfigSourceToString(resolved.source));
-  } else {
-    logger->Log(LogLevel::INFO_LEVEL, "Config source: {} ({})",
-                config::ConfigSourceToString(resolved.source),
-                resolved.path->string());
-  }
-
   install_signal_handlers();
   try {
     auto agent_config = config::ConfigLoader::LoadConfig(resolved.path);
     logger = logging::BuildLogger(agent_config);
+
+    if (resolved.source == config::ConfigSource::kBuiltinDefaults) {
+      logger->Log(LogLevel::INFO_LEVEL, "Config source: {}",
+                  config::ConfigSourceToString(resolved.source));
+    } else {
+      logger->Log(LogLevel::INFO_LEVEL, "Config source: {} ({})",
+                  config::ConfigSourceToString(resolved.source),
+                  resolved.path->string());
+    }
 
     collectors::CollectorRegistry::Instance().SetLoggers(*logger);
 
