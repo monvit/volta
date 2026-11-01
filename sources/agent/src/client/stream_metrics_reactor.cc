@@ -7,9 +7,12 @@ namespace client {
 StreamMetricsReactor::StreamMetricsReactor(
     ::volta::VoltaCollector::Stub* stub, const std::string& id,
     std::shared_ptr<::volta::agent::MetricsBuffer> buffer,
-    OnDoneCallback on_done)
-    : on_done_(std::move(on_done)), buffer_(buffer) {
-  std::cout << "Starting StreamMetricsReactor for agent " << id << std::endl;
+    OnDoneCallback on_done, std::unique_ptr<logging::Logger> logger)
+    : on_done_(std::move(on_done)),
+      logger_(std::move(logger)),
+      buffer_(buffer) {
+  logger_->Log(logging::LogLevel::INFO_LEVEL,
+               "Starting StreamMetricsReactor for agent {}", id);
   context_.AddMetadata("agent-id", id);
   stub->async()->StreamMetrics(&context_, this);
 
@@ -58,12 +61,14 @@ StreamMetricsReactor::StreamMetricsReactor(
 
 void StreamMetricsReactor::OnReadDone(bool ok) {
   if (!ok) {
-    std::cerr << "Read failed" << std::endl;
+    logger_->Log(logging::LogLevel::ERROR_LEVEL,
+                 "StreamMetricsReactor read failed");
     return;
   }
 
   BatchId batch_id = ack_msg_.batch_id();
-  std::cout << "Received ACK for batch_id " << batch_id << std::endl;
+  logger_->Log(logging::LogLevel::NOISY_LEVEL, "Received ACK for batch_id {}",
+               batch_id);
 
   {
     std::lock_guard l(snapshot_mu_);
@@ -72,21 +77,19 @@ void StreamMetricsReactor::OnReadDone(bool ok) {
       auto& [key, snapshot] = it->second;
       buffer_->GetBuffer(key)->AckSnapshot(snapshot);
       pending_snapshots_.erase(it);
-      // std::cout << "Acknowledged batch_id " << batch_id << ", pending
-      // snapshots: " << pending_snapshots_.size()
-      //           << std::endl;
     } else {
       // TODO: Server may have returned an ACK before we added the snapshot to
       // pending_snapshots_, so this might be a normal occurrence. We should
       // consider adding some buffering or delay to handle this case more
       // gracefully instead of just printing an error.
-      std::cout << "Received ACK for unknown batch_id " << batch_id
-                << std::endl;
+      logger_->Log(logging::LogLevel::WARNING_LEVEL,
+                   "Received ACK for unknown batch_id {}", batch_id);
     }
   }
 
   if (ack_msg_.has_error()) {
-    std::cerr << "Error: " << ack_msg_.error() << std::endl;
+    logger_->Log(logging::LogLevel::ERROR_LEVEL,
+                 "Received error in batch ACK: {}", ack_msg_.error());
   }
 
   StartRead(&ack_msg_);
@@ -94,7 +97,8 @@ void StreamMetricsReactor::OnReadDone(bool ok) {
 
 void StreamMetricsReactor::OnWriteDone(bool ok) {
   if (!ok) {
-    std::cerr << "Write failed" << std::endl;
+    logger_->Log(logging::LogLevel::ERROR_LEVEL,
+                 "StreamMetricsReactor write failed");
     return;
   }
 
@@ -104,16 +108,18 @@ void StreamMetricsReactor::OnWriteDone(bool ok) {
     writing_ = false;
   }
 
-  // std::cout << "Finished writing batch to server, queue size: " <<
-  // writerqu_.size() << " " << pending_snapshots_.size()
-  //           << std::endl;
-
   Write();
 }
 
 void StreamMetricsReactor::OnDone(const grpc::Status& status) {
-  std::cout << "StreamMetricsReactor finished: " << status.error_message()
-            << std::endl;
+  if (!status.ok()) {
+    logger_->Log(logging::LogLevel::ERROR_LEVEL,
+                 "StreamMetricsReactor finished with error: {}",
+                 status.error_message());
+  } else {
+    logger_->Log(logging::LogLevel::DEBUG_LEVEL,
+                 "StreamMetricsReactor finished successfully");
+  }
   on_done_(status);
 }
 

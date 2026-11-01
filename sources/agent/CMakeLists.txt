@@ -15,6 +15,7 @@ find_package(protobuf CONFIG REQUIRED)
 find_package(gRPC CONFIG REQUIRED)
 find_package(fmt CONFIG REQUIRED)
 find_package(tomlplusplus CONFIG REQUIRED)
+find_package(spdlog CONFIG REQUIRED)
 find_package(Threads REQUIRED)
 
 # --- Proto / gRPC code generation ---
@@ -99,6 +100,7 @@ target_link_libraries(volta_lib PUBLIC
     Threads::Threads
     fmt::fmt
     tomlplusplus::tomlplusplus
+    spdlog::spdlog
     ${CMAKE_DL_LIBS}
 )
 

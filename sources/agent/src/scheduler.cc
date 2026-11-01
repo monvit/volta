@@ -11,13 +11,17 @@ volatile sig_atomic_t g_running = 1;
 namespace volta {
 namespace agent {
 
+using logging::LogLevel;
+
 Scheduler::Scheduler(const config::Config& config,
                      std::vector<collectors::Collector*>&& collectors,
-                     std::shared_ptr<MetricsBuffer> buffer)
+                     std::shared_ptr<MetricsBuffer> buffer,
+                     std::unique_ptr<logging::Logger> logger)
     : collectors_(std::move(collectors)),
       config_(config),
       buffer_(buffer),
       exporter_(config),
+      logger_(std::move(logger)),
       ms_queue_("/volta_agent_command_queue", MessageQueue::Role::Receiver,
                 {}) {}
 
@@ -26,8 +30,10 @@ void Scheduler::Run() {
     collector->Init();
   }
 
-  std::cout << "Starting collection loop (Interval: "
-            << config_.collection_interval.count() << "ms)..." << std::endl;
+  logger_->Log(LogLevel::INFO_LEVEL,
+               "Starting collection loop (Interval: {} ms)",
+               config_.collection_interval.count());
+
   ms_queue_.listen([this](std::string_view message) {
     if (message.starts_with("dump_start")) {
       std::optional<std::string> path = std::nullopt;
@@ -36,13 +42,13 @@ void Scheduler::Run() {
         message.remove_prefix(path_start + 1);
         path = message;
       }
-      std::cout << "path: " << *path << std::endl;
       this->exporter_.StartDump(path);
     }
     if (message.starts_with("dump_end")) {
       this->exporter_.EndDump();
     }
   });
+
   while (g_running) {
     for (const auto& collector : collectors_) {
       // TODO: make the metrics collect into a preallocated tray
