@@ -107,21 +107,18 @@ int agent_mode(int argc, const char* const* argv) {
                         logger->WithName("Scheduler"));
 
     auto grpc_logger = logger->WithName("gRPC");
-    std::jthread grpc_thread([logger = std::move(grpc_logger), &scheduler,
-                              &agent_config, &buffer]() {
-      if (auto channel = client::Client::CreateChannel(
-              agent_config.server_address + ":" +
-              std::to_string(agent_config.server_port))) {
-        client::Client grpc_client(channel, agent_config, buffer,
-                                   logger->WithName("gRPC Client"));
-        grpc_client.Connect();
-      } else {
-        logger->Log(
-            LogLevel::ERROR_LEVEL,
-            "Failed to create channel, falling back to local dashboard");
-        // scheduler.print_dashboard.store(true);
-      }
-    });
+    std::jthread grpc_thread(
+        [logger = std::move(grpc_logger), &agent_config, &buffer]() {
+          if (auto channel = client::Client::CreateChannel(
+                  agent_config.server_address + ":" +
+                  std::to_string(agent_config.server_port))) {
+            client::Client grpc_client(channel, agent_config, buffer,
+                                       logger->WithName("gRPC Client"));
+            grpc_client.Connect();
+          } else {
+            logger->Log(LogLevel::ERROR_LEVEL, "Failed to create gRPC channel");
+          }
+        });
 
     scheduler.Run();
 
