@@ -99,7 +99,6 @@ class ConfigResolutionTest : public ::testing::Test {
 };
 
 TEST_F(ConfigResolutionTest, LoadsLoggingOptions) {
-  const auto log_path = tmp_.path() / "agent.log";
   const auto config_path =
       WriteFile(tmp_.path(), "logging.conf", "log_level = \"debug\"\n");
 
