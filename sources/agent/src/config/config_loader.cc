@@ -106,9 +106,9 @@ bool AddRange(cpu_set_t& set, unsigned int from, unsigned int to,
 
 void ConfigLoader::LoadConfigFile(const std::filesystem::path& path,
                                   Config& out_config) {
-  toml::table tbl = toml::parse_file(path.string());
-
   try {
+    toml::table tbl = toml::parse_file(path.string());
+
     LoadCoreAffinity(tbl, out_config);
     LoadInterval(tbl, out_config);
     LoadTimeWindow(tbl, out_config);
@@ -120,6 +120,7 @@ void ConfigLoader::LoadConfigFile(const std::filesystem::path& path,
   } catch (const toml::parse_error& err) {
     logger_->Log(LogLevel::ERROR_LEVEL, "Parsing Agent config failed: {} at {}",
                  err.description(), err.source().begin.line);
+    throw;
   }
 }
 
