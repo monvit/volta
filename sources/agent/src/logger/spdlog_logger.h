@@ -11,13 +11,13 @@ class SpdlogLogger final : public Logger {
  public:
   explicit SpdlogLogger(std::shared_ptr<spdlog::logger> impl)
       : impl_(std::move(impl)) {
-    impl_->set_pattern("[%^%l%$] [%n] %v");
+    impl_->set_pattern(kPattern);
   }
 
   explicit SpdlogLogger(std::shared_ptr<spdlog::logger> impl,
                         std::string_view name)
       : impl_(std::move(impl->clone(std::string(name)))) {
-    impl_->set_pattern("[%^%l%$] [%n] %v");
+    impl_->set_pattern(kPattern);
   }
 
   std::unique_ptr<Logger> WithName(std::string_view name) const override {
@@ -33,6 +33,10 @@ class SpdlogLogger final : public Logger {
   LogLevel GetLevel() const override { return ToLogLevel(impl_->level()); }
 
  private:
+  // [YYYY-MM-DD HH:MM:SS.mmm] [level] [module] message
+  static constexpr const char* kPattern =
+      "[%Y-%m-%d %H:%M:%S.%e] [%^%l%$] [%n] %v";
+
   void Write(LogLevel l, std::string_view msg) override {
     impl_->log(ToSpdlog(l), msg);
   }
