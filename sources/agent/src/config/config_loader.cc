@@ -106,11 +106,6 @@ bool AddRange(cpu_set_t& set, unsigned int from, unsigned int to,
 
 void ConfigLoader::LoadConfigFile(const std::filesystem::path& path,
                                   Config& out_config) {
-  if (!std::filesystem::exists(path)) {
-    logger_->Log(LogLevel::ERROR_LEVEL,
-                 "Agent config file not found, loading default settings.");
-    return;
-  }
   toml::table tbl = toml::parse_file(path.string());
 
   try {
