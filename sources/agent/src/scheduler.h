@@ -38,8 +38,8 @@ class Scheduler {
   std::vector<collectors::Collector*> collectors_;
   const config::Config& config_;
   std::shared_ptr<MetricsBuffer> buffer_;
-  control::ControlSocket control_socket_;
   Exporter exporter_;
+  control::ControlSocket control_socket_;
 };
 
 }  // namespace agent

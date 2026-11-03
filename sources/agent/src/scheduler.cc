@@ -26,11 +26,11 @@ Scheduler::Scheduler(const config::Config& config,
       collectors_(std::move(collectors)),
       config_(config),
       buffer_(buffer),
+      exporter_(config),
       control_socket_(
           control::ResolveControlSocketPath(control::ControlPathSide::kDaemon)
               .string(),
-          control::ControlSocket::Role::kServer),
-      exporter_(config) {}
+          control::ControlSocket::Role::kServer) {}
 
 void Scheduler::Run() {
   for (auto collector : collectors_) {
