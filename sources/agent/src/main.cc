@@ -68,7 +68,10 @@ int RunExportStop(int, const char**) {
 }
 
 int RunExport(int argc, const char* argv[]) {
-  if (argc < 3) return 1;
+  if (argc < 3) {
+    std::cerr << "error: missing export command (expected start or stop)\n";
+    return 1;
+  }
   static constexpr CliCommand kExport[] = {
       {"start", RunExportStart},
       {"stop", RunExportStop},
@@ -77,11 +80,16 @@ int RunExport(int argc, const char* argv[]) {
   for (const auto& subcommand : kExport) {
     if (name == subcommand.name) return subcommand.run(argc, argv);
   }
+  std::cerr << "error: unknown export command '" << name
+            << "' (expected start or stop)\n";
   return 1;
 }
 
 int cli_mode(int argc, const char* argv[]) {
-  if (argc < 2) return 1;
+  if (argc < 2) {
+    std::cerr << "error: missing command (expected export)\n";
+    return 1;
+  }
   static constexpr CliCommand kCommands[] = {
       {"export", RunExport},
   };
@@ -89,6 +97,7 @@ int cli_mode(int argc, const char* argv[]) {
   for (const auto& command : kCommands) {
     if (name == command.name) return command.run(argc, argv);
   }
+  std::cerr << "error: unknown command '" << name << "' (expected export)\n";
   return 1;
 }
 
@@ -169,5 +178,8 @@ int main(int argc, const char* argv[]) {
     return cli_mode(argc, argv);
   else if (program_name.ends_with("voltad"))
     return agent_mode(argc, argv);
+  std::cerr << "This is a busy box style binary.\nLink it as \"volta\" or "
+               "\"voltad\" to run."
+            << std::endl;
   return 1;
 }

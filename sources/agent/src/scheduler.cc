@@ -51,8 +51,12 @@ void Scheduler::Run() {
     }
     if (const auto* start = std::get_if<control::DumpStart>(&*command)) {
       exporter_.StartDump(start->path);
+      const auto dump_dir = start->path ? start->path->string()
+                                        : std::string("configured directory");
+      logger_->Log(LogLevel::INFO_LEVEL, "Dump started to {}", dump_dir);
     } else {
       exporter_.EndDump();
+      logger_->Log(LogLevel::INFO_LEVEL, "Dump ended");
     }
   });
 
