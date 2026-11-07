@@ -78,25 +78,27 @@ std::filesystem::path ResolveDaemon() {
   throw ControlPathError(kMissingRuntimeMessage);
 }
 
-std::filesystem::path ResolveCli(const ControlPathQuery& query) {
+std::filesystem::path ResolveCli() {
   if (auto override_path = Env(kControlSocketEnv)) {
     return RequireAbsolute(*override_path);
   }
-  auto system = query.system_socket.empty()
-                    ? std::filesystem::path(kSystemControlSocket)
-                    : query.system_socket;
-  std::error_code ec;
-  if (std::filesystem::exists(system, ec)) return system;
+  if (auto runtime = Env(kRuntimeDirectoryEnv)) {
+    if (!IsDir(*runtime)) {
+      throw ControlPathError(
+          "control socket runtime directory was not provided "
+          "($RUNTIME_DIRECTORY)");
+    }
+    return std::filesystem::path(*runtime) / "control.sock";
+  }
   if (auto xdg = Env(kXdgRuntimeDirEnv)) return XdgSocket(*xdg);
   throw ControlPathError(kMissingRuntimeMessage);
 }
 
 }  // namespace
 
-std::filesystem::path ResolveControlSocketPath(ControlPathSide side,
-                                               const ControlPathQuery& query) {
+std::filesystem::path ResolveControlSocketPath(ControlPathSide side) {
   if (side == ControlPathSide::kDaemon) return ResolveDaemon();
-  return ResolveCli(query);
+  return ResolveCli();
 }
 
 }  // namespace control

@@ -12,7 +12,6 @@ namespace control {
 inline constexpr char kControlSocketEnv[] = "VOLTA_CONTROL_SOCKET";
 inline constexpr char kRuntimeDirectoryEnv[] = "RUNTIME_DIRECTORY";
 inline constexpr char kXdgRuntimeDirEnv[] = "XDG_RUNTIME_DIR";
-inline constexpr char kSystemControlSocket[] = "/run/volta/control.sock";
 
 struct ControlPathError : std::runtime_error {
   using std::runtime_error::runtime_error;
@@ -20,13 +19,7 @@ struct ControlPathError : std::runtime_error {
 
 enum class ControlPathSide { kDaemon, kCli };
 
-// Empty system_socket means /run/volta/control.sock. Tests pass a temp path.
-struct ControlPathQuery {
-  std::filesystem::path system_socket;
-};
-
-std::filesystem::path ResolveControlSocketPath(
-    ControlPathSide side, const ControlPathQuery& query = {});
+std::filesystem::path ResolveControlSocketPath(ControlPathSide side);
 
 }  // namespace control
 }  // namespace agent
