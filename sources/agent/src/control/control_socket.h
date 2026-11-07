@@ -10,6 +10,8 @@
 #include <string_view>
 #include <thread>
 
+#include "logger/logger.h"
+
 namespace volta {
 namespace agent {
 namespace control {
@@ -28,7 +30,9 @@ class ControlSocket {
 
   using MessageHandler = std::function<void(std::string_view message)>;
 
-  ControlSocket(std::string path, Role role, Options opts = Options());
+  ControlSocket(std::string path, Role role,
+                std::unique_ptr<logging::Logger> logger,
+                Options opts = Options());
   ~ControlSocket();
 
   ControlSocket(const ControlSocket&) = delete;
@@ -52,6 +56,10 @@ class ControlSocket {
   void BindServer();
   bool EnsureClientConnected(int* err_out);
   void RecvLoop();
+  enum class DatagramRead { kRetry, kStop, kMessage };
+  bool WaitForDatagram(int fd, const std::atomic<bool>& listening);
+  DatagramRead ReadDatagram(int fd, std::vector<char>& buf,
+                            bool still_listening, std::string* message);
 
   std::string path_;
   Role role_;
@@ -60,6 +68,7 @@ class ControlSocket {
   int lock_fd_ = -1;
   bool connected_ = false;
   bool owns_path_ = false;
+  std::unique_ptr<logging::Logger> logger_;
   MessageHandler handler_;
   std::atomic<bool> listening_{false};
   std::thread recv_thread_;

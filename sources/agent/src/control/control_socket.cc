@@ -11,7 +11,6 @@
 #include <cerrno>
 #include <cstddef>
 #include <cstring>
-#include <iostream>
 #include <stdexcept>
 #include <utility>
 #include <vector>
@@ -63,8 +62,13 @@ const char* DescribeSendError(int err) {
   }
 }
 
-ControlSocket::ControlSocket(std::string path, Role role, Options opts)
-    : path_(std::move(path)), role_(role), opts_(opts) {
+ControlSocket::ControlSocket(std::string path, Role role,
+                             std::unique_ptr<logging::Logger> logger,
+                             Options opts)
+    : path_(std::move(path)),
+      role_(role),
+      opts_(opts),
+      logger_(std::move(logger)) {
   if (path_.empty()) {
     throw std::invalid_argument("control socket path must not be empty");
   }
@@ -89,8 +93,9 @@ ControlSocket::~ControlSocket() {
   if (owns_path_) {
     // ENOENT is success: systemd may already have removed the runtime dir.
     if (::unlink(path_.c_str()) != 0 && errno != ENOENT) {
-      std::cerr << "control socket unlink(" << path_
-                << "): " << std::strerror(errno) << "\n";
+      logger_->Log(logging::LogLevel::ERROR_LEVEL,
+                   "control socket unlink({}): {}", path_,
+                   std::strerror(errno));
     }
   }
   CloseLockFd();
@@ -229,9 +234,8 @@ void ControlSocket::StopListening() {
   if (recv_thread_.joinable()) recv_thread_.join();
 }
 
-namespace {
-
-bool WaitForDatagram(int fd, const std::atomic<bool>& listening) {
+bool ControlSocket::WaitForDatagram(int fd,
+                                    const std::atomic<bool>& listening) {
   while (listening.load()) {
     pollfd pfd{};
     pfd.fd = fd;
@@ -240,7 +244,8 @@ bool WaitForDatagram(int fd, const std::atomic<bool>& listening) {
     if (ready < 0) {
       if (errno == EINTR) continue;
       if (listening.load()) {
-        std::cerr << "control socket poll: " << std::strerror(errno) << "\n";
+        logger_->Log(logging::LogLevel::ERROR_LEVEL, "control socket poll: {}",
+                     std::strerror(errno));
       }
       return false;
     }
@@ -250,29 +255,29 @@ bool WaitForDatagram(int fd, const std::atomic<bool>& listening) {
   return false;
 }
 
-enum class DatagramRead { kRetry, kStop, kMessage };
-
-DatagramRead ReadDatagram(int fd, std::vector<char>& buf, bool still_listening,
-                          std::string* message) {
+ControlSocket::DatagramRead ControlSocket::ReadDatagram(int fd,
+                                                        std::vector<char>& buf,
+                                                        bool still_listening,
+                                                        std::string* message) {
   ssize_t n = ::recv(fd, buf.data(), buf.size(), MSG_TRUNC);
   if (n < 0) {
     if (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR) {
       return DatagramRead::kRetry;
     }
     if (still_listening) {
-      std::cerr << "control socket recv: " << std::strerror(errno) << "\n";
+      logger_->Log(logging::LogLevel::ERROR_LEVEL, "control socket recv: {}",
+                   std::strerror(errno));
     }
     return DatagramRead::kStop;
   }
   if (static_cast<std::size_t>(n) > buf.size()) {
-    std::cerr << "control socket: dropped truncated datagram\n";
+    logger_->Log(logging::LogLevel::ERROR_LEVEL,
+                 "control socket: dropped truncated datagram");
     return DatagramRead::kRetry;
   }
   message->assign(buf.data(), static_cast<std::size_t>(n));
   return DatagramRead::kMessage;
 }
-
-}  // namespace
 
 void ControlSocket::RecvLoop() {
   std::vector<char> buf(opts_.max_message_size);
@@ -290,7 +295,8 @@ void ControlSocket::RecvLoop() {
     try {
       handler_(message);
     } catch (const std::exception& ex) {
-      std::cerr << "control socket handler: " << ex.what() << "\n";
+      logger_->Log(logging::LogLevel::ERROR_LEVEL, "control socket handler: {}",
+                   ex.what());
     }
   }
 }

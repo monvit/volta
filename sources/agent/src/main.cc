@@ -12,6 +12,7 @@
 #include "control/control_socket.h"
 #include "control/control_socket_path.h"
 #include "logger/logger_builder.h"
+#include "logger/stderr_logger.h"
 #include "scheduler.h"
 
 using namespace volta::agent;
@@ -33,8 +34,10 @@ int SendControlCommand(const control::ControlCommand& command) {
   try {
     auto path =
         control::ResolveControlSocketPath(control::ControlPathSide::kCli);
+    auto logger = std::make_unique<logging::StderrLogger>();
     control::ControlSocket socket(path.string(),
-                                  control::ControlSocket::Role::kClient);
+                                  control::ControlSocket::Role::kClient,
+                                  logger->WithName("ControlSocket"));
     auto payload = control::Encode(command);
     int err = 0;
     if (!socket.Send(payload, &err)) {

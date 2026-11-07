@@ -30,7 +30,8 @@ Scheduler::Scheduler(const config::Config& config,
       control_socket_(
           control::ResolveControlSocketPath(control::ControlPathSide::kDaemon)
               .string(),
-          control::ControlSocket::Role::kServer) {}
+          control::ControlSocket::Role::kServer,
+          logger_->WithName("ControlSocket")) {}
 
 void Scheduler::Run() {
   for (auto collector : collectors_) {

@@ -10,6 +10,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <filesystem>
+#include <memory>
 #include <mutex>
 #include <optional>
 #include <string>
@@ -19,6 +20,7 @@
 #include "control/control_command.h"
 #include "control/control_socket_path.h"
 #include "gtest/gtest.h"
+#include "logger/stderr_logger.h"
 
 namespace volta {
 namespace agent {
@@ -27,6 +29,11 @@ namespace {
 
 class ControlSocketTest : public ::testing::Test {
  protected:
+  std::unique_ptr<logging::Logger> MakeLogger() const {
+    logging::StderrLogger logger;
+    return logger.WithName("ControlSocketTest");
+  }
+
   void SetUp() override {
     Save(kControlSocketEnv);
     Save(kRuntimeDirectoryEnv);
@@ -75,7 +82,7 @@ class ControlSocketTest : public ::testing::Test {
 
 TEST_F(ControlSocketTest, RoundTrip) {
   auto path = (dir_ / "control.sock").string();
-  ControlSocket server(path, ControlSocket::Role::kServer);
+  ControlSocket server(path, ControlSocket::Role::kServer, MakeLogger());
 
   std::mutex mu;
   std::condition_variable cv;
@@ -86,7 +93,7 @@ TEST_F(ControlSocketTest, RoundTrip) {
     cv.notify_one();
   });
 
-  ControlSocket client(path, ControlSocket::Role::kClient);
+  ControlSocket client(path, ControlSocket::Role::kClient, MakeLogger());
   int err = 0;
   ASSERT_TRUE(client.Send(Encode(DumpEnd{}), &err)) << DescribeSendError(err);
 
@@ -99,7 +106,8 @@ TEST_F(ControlSocketTest, RoundTrip) {
 TEST_F(ControlSocketTest, SocketModeIs0660AndUnlinks) {
   auto path = dir_ / "control.sock";
   {
-    ControlSocket server(path.string(), ControlSocket::Role::kServer);
+    ControlSocket server(path.string(), ControlSocket::Role::kServer,
+                         MakeLogger());
     struct stat st{};
     ASSERT_EQ(::stat(path.c_str(), &st), 0);
     EXPECT_EQ(st.st_mode & 0777, 0660);
@@ -107,13 +115,14 @@ TEST_F(ControlSocketTest, SocketModeIs0660AndUnlinks) {
   EXPECT_FALSE(std::filesystem::exists(path));
   EXPECT_TRUE(
       std::filesystem::exists(std::filesystem::path(path.string() + ".lock")));
-  ControlSocket again(path.string(), ControlSocket::Role::kServer);
+  ControlSocket again(path.string(), ControlSocket::Role::kServer,
+                      MakeLogger());
   EXPECT_TRUE(std::filesystem::is_socket(path));
 }
 
 TEST_F(ControlSocketTest, SecondServerOnSamePathThrowsAlreadyRunning) {
   auto path = (dir_ / "control.sock").string();
-  ControlSocket server(path, ControlSocket::Role::kServer);
+  ControlSocket server(path, ControlSocket::Role::kServer, MakeLogger());
 
   std::mutex mu;
   std::condition_variable cv;
@@ -125,14 +134,14 @@ TEST_F(ControlSocketTest, SecondServerOnSamePathThrowsAlreadyRunning) {
   });
 
   try {
-    ControlSocket overlapping(path, ControlSocket::Role::kServer);
+    ControlSocket overlapping(path, ControlSocket::Role::kServer, MakeLogger());
     FAIL() << "expected second server to throw";
   } catch (const std::runtime_error& err) {
     EXPECT_NE(std::string(err.what()).find("already running"),
               std::string::npos);
   }
 
-  ControlSocket client(path, ControlSocket::Role::kClient);
+  ControlSocket client(path, ControlSocket::Role::kClient, MakeLogger());
   int err = 0;
   ASSERT_TRUE(client.Send(Encode(DumpEnd{}), &err)) << DescribeSendError(err);
 
@@ -144,7 +153,7 @@ TEST_F(ControlSocketTest, SecondServerOnSamePathThrowsAlreadyRunning) {
 
 TEST_F(ControlSocketTest, MissingSocketSaysServiceDown) {
   ControlSocket client((dir_ / "missing.sock").string(),
-                       ControlSocket::Role::kClient);
+                       ControlSocket::Role::kClient, MakeLogger());
   int err = 0;
   EXPECT_FALSE(client.Send("dump_end", &err));
   EXPECT_EQ(err, ENOENT);
@@ -158,7 +167,7 @@ TEST_F(ControlSocketTest, DropsTruncatedDatagram) {
   auto path = (dir_ / "control.sock").string();
   ControlSocket::Options opts;
   opts.max_message_size = 8;
-  ControlSocket server(path, ControlSocket::Role::kServer, opts);
+  ControlSocket server(path, ControlSocket::Role::kServer, MakeLogger(), opts);
 
   std::mutex mu;
   std::condition_variable cv;
@@ -237,7 +246,8 @@ TEST_F(ControlSocketTest, DaemonPath) {
 
 TEST_F(ControlSocketTest, CliPath) {
   auto system = dir_ / "system.sock";
-  ControlSocket server(system.string(), ControlSocket::Role::kServer);
+  ControlSocket server(system.string(), ControlSocket::Role::kServer,
+                       MakeLogger());
   auto xdg = dir_ / "xdg";
   std::filesystem::create_directory(xdg);
   setenv(kXdgRuntimeDirEnv, xdg.c_str(), 1);
