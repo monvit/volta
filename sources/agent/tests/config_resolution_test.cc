@@ -9,6 +9,7 @@
 #include <optional>
 #include <string>
 
+#include "collectors/collector.h"
 #include "config/config_loader.h"
 #include "gtest/gtest.h"
 
@@ -97,6 +98,31 @@ class ConfigResolutionTest : public ::testing::Test {
   std::filesystem::path system_path_{tmp_.path() / "etc-volta-agent.conf"};
   std::optional<std::string> saved_env_;
 };
+
+TEST_F(ConfigResolutionTest, DefaultMetricsAreCollectorSupported) {
+  const auto defaults = ConfigLoader::LoadDefaultConfig();
+  EXPECT_EQ(defaults.requestedMetrics,
+            collectors::CollectorRegistry::Instance().SatisfiableMetrics());
+  EXPECT_FALSE(defaults.requestedMetrics.empty());
+}
+
+TEST_F(ConfigResolutionTest, SerializesAndReloadsDefaultConfig) {
+  const auto defaults = ConfigLoader::LoadDefaultConfig();
+  const auto path = WriteFile(tmp_.path(), "defaults.conf",
+                              ConfigLoader::SerializeConfig(defaults));
+  const auto reloaded = ConfigLoader::LoadConfig(path);
+
+  EXPECT_EQ(reloaded.collection_interval, defaults.collection_interval);
+  EXPECT_EQ(reloaded.server_address, defaults.server_address);
+  EXPECT_EQ(reloaded.server_port, defaults.server_port);
+  EXPECT_EQ(reloaded.requestedMetrics, defaults.requestedMetrics);
+  EXPECT_EQ(reloaded.buffered_time_window, defaults.buffered_time_window);
+  EXPECT_EQ(reloaded.log_level, defaults.log_level);
+  for (int cpu = 0; cpu < CPU_SETSIZE; ++cpu) {
+    EXPECT_EQ(CPU_ISSET(cpu, &reloaded.core_affinity),
+              CPU_ISSET(cpu, &defaults.core_affinity));
+  }
+}
 
 TEST_F(ConfigResolutionTest, LoadsLoggingOptions) {
   const auto config_path =
