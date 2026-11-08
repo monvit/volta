@@ -90,8 +90,13 @@ std::filesystem::path ResolveCli() {
     }
     return std::filesystem::path(*runtime) / "control.sock";
   }
+  // Prefer a running system service over a per-user socket when both are
+  // available. Otherwise keep local development behavior via XDG_RUNTIME_DIR.
+  const std::filesystem::path system_socket = "/run/volta/control.sock";
+  if (IsDir(system_socket.parent_path())) return system_socket;
   if (auto xdg = Env(kXdgRuntimeDirEnv)) return XdgSocket(*xdg);
-  throw ControlPathError(kMissingRuntimeMessage);
+  // Matches RuntimeDirectory=volta in the installed systemd unit.
+  return system_socket;
 }
 
 }  // namespace

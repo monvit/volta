@@ -242,6 +242,11 @@ TEST_F(ControlSocketTest, DaemonPath) {
   }
 }
 
+TEST_F(ControlSocketTest, CliDefaultsToSystemServiceSocket) {
+  EXPECT_EQ(ResolveControlSocketPath(ControlPathSide::kCli),
+            "/run/volta/control.sock");
+}
+
 TEST_F(ControlSocketTest, CliPathUsesDaemonPrecedence) {
   auto xdg = dir_ / "xdg";
   std::filesystem::create_directory(xdg);
