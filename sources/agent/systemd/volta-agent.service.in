@@ -1,0 +1,35 @@
+[Unit]
+Description=Volta system monitoring agent
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=@CMAKE_INSTALL_FULL_BINDIR@/voltad
+ExecStartPre=/usr/bin/mkdir -p /var/lib/volta/dumps
+Restart=on-failure
+RestartSec=5s
+
+# systemd allocates a private, unprivileged UID/GID for this service.
+DynamicUser=yes
+RuntimeDirectory=volta
+RuntimeDirectoryMode=0750
+Environment=RUNTIME_DIRECTORY=/run/volta
+StateDirectory=volta
+StateDirectoryMode=0750
+
+# RAPL powercap energy counters are read-only sysfs attributes. No root user
+# or ambient capabilities are required on supported Linux systems.
+NoNewPrivileges=yes
+CapabilityBoundingSet=
+ProtectSystem=strict
+ProtectHome=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+PrivateTmp=yes
+LockPersonality=yes
+RestrictSUIDSGID=yes
+
+[Install]
+WantedBy=multi-user.target
