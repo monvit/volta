@@ -5,6 +5,11 @@
 #include <iostream>
 #include <sstream>
 #include <thread>
+#include <utility>
+#include <variant>
+
+#include "control/control_command.h"
+#include "control/control_socket_path.h"
 
 volatile sig_atomic_t g_running = 1;
 
@@ -17,13 +22,16 @@ Scheduler::Scheduler(const config::Config& config,
                      std::vector<collectors::Collector*>&& collectors,
                      std::shared_ptr<MetricsBuffer> buffer,
                      std::unique_ptr<logging::Logger> logger)
-    : collectors_(std::move(collectors)),
+    : logger_(std::move(logger)),
+      collectors_(std::move(collectors)),
       config_(config),
       buffer_(buffer),
       exporter_(config),
-      logger_(std::move(logger)),
-      ms_queue_("/volta_agent_command_queue", MessageQueue::Role::Receiver,
-                {}) {}
+      control_socket_(
+          control::ResolveControlSocketPath(control::ControlPathSide::kDaemon)
+              .string(),
+          control::ControlSocket::Role::kServer,
+          logger_->WithName("ControlSocket")) {}
 
 void Scheduler::Run() {
   for (auto collector : collectors_) {
@@ -34,18 +42,21 @@ void Scheduler::Run() {
                "Starting collection loop (Interval: {} ms)",
                config_.collection_interval.count());
 
-  ms_queue_.listen([this](std::string_view message) {
-    if (message.starts_with("dump_start")) {
-      std::optional<std::string> path = std::nullopt;
-      if (message.size() > 11) {
-        int path_start = message.find(";");
-        message.remove_prefix(path_start + 1);
-        path = message;
-      }
-      this->exporter_.StartDump(path);
+  control_socket_.Listen([this](std::string_view message) {
+    auto command = control::Decode(message);
+    if (!command) {
+      logger_->Log(LogLevel::WARNING_LEVEL,
+                   "control socket: dropped unrecognized command");
+      return;
     }
-    if (message.starts_with("dump_end")) {
-      this->exporter_.EndDump();
+    if (const auto* start = std::get_if<control::DumpStart>(&*command)) {
+      exporter_.StartDump(start->path);
+      const auto dump_dir = start->path ? start->path->string()
+                                        : std::string("configured directory");
+      logger_->Log(LogLevel::INFO_LEVEL, "Dump started to {}", dump_dir);
+    } else {
+      exporter_.EndDump();
+      logger_->Log(LogLevel::INFO_LEVEL, "Dump ended");
     }
   });
 
@@ -63,7 +74,7 @@ void Scheduler::Run() {
     std::this_thread::sleep_for(config_.collection_interval);
   }
   exporter_.EndDump();
-  ms_queue_.stop_listening();
+  control_socket_.StopListening();
 }
 
 std::string Scheduler::DescribeKey(const BufferKey& key) {
