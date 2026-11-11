@@ -14,6 +14,7 @@ class RamCollector final : public RegisteredCollector<RamCollector> {
   bool IsSupported() override;
   std::vector<MetricType> Satisfiable() override;
   void SetRequestedMetrics(const std::vector<MetricType>& metrics) override;
+  std::string_view GetName() override { return "Ram Collector"; }
 
  private:
   void ReadStats(uint64_t& used, uint64_t& total);

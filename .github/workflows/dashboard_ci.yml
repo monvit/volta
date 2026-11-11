@@ -31,6 +31,9 @@ jobs:
         cache: true
         run-install: true
 
+    - name: Generate protobuf
+      run: vp run proto:gen
+
     - name: Format, lint & typecheck
       run: vp check
 

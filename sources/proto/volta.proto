@@ -2,10 +2,6 @@ syntax = "proto3";
 
 package volta;
 
-import "google/protobuf/timestamp.proto";
-import "google/protobuf/duration.proto";
-import "google/protobuf/empty.proto";
-
 import "types/transport.proto";
 import "types/metric.proto";
 

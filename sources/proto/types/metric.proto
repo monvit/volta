@@ -2,8 +2,6 @@ syntax = "proto3";
 
 package volta;
 
-import "google/protobuf/timestamp.proto";
-
 option go_package = "github.com/monvit/volta/server/pb/types;types";
 
 enum MetricType {

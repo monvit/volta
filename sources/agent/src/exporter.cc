@@ -1,5 +1,6 @@
 #include "exporter.h"
 
+#include <mutex>
 #include <variant>
 
 namespace volta {
@@ -12,17 +13,18 @@ Exporter::Exporter(const config::Config& cfg) : dump_file_() {
 }
 
 void Exporter::Dump(const std::vector<Metric>& metrics) {
-  if (!IsActive()) {
-    return;
-  }
+  std::lock_guard lock(mu_);
+  if (!is_exporting) return;
 
   for (auto metric : metrics)
     dump_file_ << MetricType_Name(metric.type) << ";" << DescribeDevice(metric)
                << ";" << metric.timestamp << ";" << metric.value << "\n";
+  dump_file_.flush();
 }
 
 void Exporter::StartDump(
     std::optional<std::filesystem::path> dump_dir_overload) {
+  std::lock_guard lock(mu_);
   if (is_exporting) return;
 
   auto dir = dump_dir_overload.has_value() ? *dump_dir_overload : dump_dir_;
@@ -31,14 +33,22 @@ void Exporter::StartDump(
   dump_file_.open(dir.string() + std::format("/dump_{}.csv",
                                              std::chrono::system_clock::now()),
                   std::ios_base::out | std::ios_base::trunc);
+  if (!dump_file_.is_open()) return;
 
   dump_file_ << "metric_type;device_id;timestamp;value\n";
+  dump_file_.flush();
   is_exporting = true;
 }
 
 void Exporter::EndDump() {
+  std::lock_guard lock(mu_);
   if (dump_file_.is_open()) dump_file_.close();
   is_exporting = false;
+}
+
+bool Exporter::IsActive() const {
+  std::lock_guard lock(mu_);
+  return is_exporting;
 }
 
 std::string Exporter::DescribeDevice(const Metric& m) {

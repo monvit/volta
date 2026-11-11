@@ -1,13 +1,23 @@
+#include <filesystem>
 #include <iostream>
 #include <string>
+#include <string_view>
 
 #include "client/volta_collector_client.h"
 #include "collectors/collector.h"
 #include "config/config.h"
 #include "config/config_loader.h"
+#include "config/config_resolution.h"
+#include "control/control_command.h"
+#include "control/control_socket.h"
+#include "control/control_socket_path.h"
+#include "logger/logger_builder.h"
+#include "logger/stderr_logger.h"
 #include "scheduler.h"
 
 using namespace volta::agent;
+using logging::LogLevel;
+
 static void on_signal(int) { g_running = 0; }
 
 void install_signal_handlers() {
@@ -20,75 +30,144 @@ void install_signal_handlers() {
   sigaction(SIGTERM, &sa, nullptr);
 }
 
-int cli_mode(int argc, const char* argv[]) {
-  if (argc < 2) return 1;
-
-  MessageQueue msq("/volta_agent_command_queue", MessageQueue::Role::Sender,
-                   {});
-  std::string command(argv[1]);
-
-  if (command == "export") {
-    if (argc < 3) return 1;
-    std::string subcommand(argv[2]);
-
-    if (subcommand == "start") {
-      std::string file("");
-      if (argc >= 4) {
-        std::filesystem::path fp(argv[3]);
-        file = std::filesystem::absolute(fp).string();
-      }
-      std::string message = std::format("dump_start;{}", file);
-      // std::string message = "dump_start";
-      msq.send(message);
-      std::cout << "Message " << message << " sent" << std::endl;
-      return 0;
+int SendControlCommand(const control::ControlCommand& command) {
+  try {
+    auto path =
+        control::ResolveControlSocketPath(control::ControlPathSide::kCli);
+    auto logger = std::make_unique<logging::StderrLogger>();
+    control::ControlSocket socket(path.string(),
+                                  control::ControlSocket::Role::kClient,
+                                  logger->WithName("ControlSocket"));
+    auto payload = control::Encode(command);
+    int err = 0;
+    if (!socket.Send(payload, &err)) {
+      std::cerr << "error: " << control::DescribeSendError(err) << "\n";
+      return 1;
     }
-
-    if (subcommand == "stop") {
-      msq.send("dump_end");
-      std::cout << "Message dump_end sent" << std::endl;
-      return 0;
-    }
-
+    std::cout << "Message " << payload << " sent\n";
+    return 0;
+  } catch (const std::exception& ex) {
+    std::cerr << "error: " << ex.what() << "\n";
     return 1;
   }
+}
 
+struct CliCommand {
+  std::string_view name;
+  int (*run)(int argc, const char* argv[]);
+};
+
+int RunExportStart(int argc, const char* argv[]) {
+  control::DumpStart command;
+  if (argc >= 4) command.path = std::filesystem::absolute(argv[3]);
+  return SendControlCommand(command);
+}
+
+int RunExportStop(int, const char**) {
+  return SendControlCommand(control::DumpEnd{});
+}
+
+int RunExport(int argc, const char* argv[]) {
+  if (argc < 3) {
+    std::cerr << "error: missing export command (expected start or stop)\n";
+    return 1;
+  }
+  static constexpr CliCommand kExport[] = {
+      {"start", RunExportStart},
+      {"stop", RunExportStop},
+  };
+  std::string_view name(argv[2]);
+  for (const auto& subcommand : kExport) {
+    if (name == subcommand.name) return subcommand.run(argc, argv);
+  }
+  std::cerr << "error: unknown export command '" << name
+            << "' (expected start or stop)\n";
   return 1;
 }
 
-int agent_mode() {
+int cli_mode(int argc, const char* argv[]) {
+  if (argc < 2) {
+    std::cerr << "error: missing command (expected export)\n";
+    return 1;
+  }
+  static constexpr CliCommand kCommands[] = {
+      {"export", RunExport},
+  };
+  std::string_view name(argv[1]);
+  for (const auto& command : kCommands) {
+    if (name == command.name) return command.run(argc, argv);
+  }
+  std::cerr << "error: unknown command '" << name << "' (expected export)\n";
+  return 1;
+}
+
+int agent_mode(int argc, const char* const* argv) {
+  config::Config default_config;
+  auto logger = logging::BuildLogger(default_config);
+
+  auto cli = config::ParseCli(argc, argv);
+  if (!cli) {
+    logger->Log(LogLevel::ERROR_LEVEL, "Invalid arguments (try --help)");
+    return 2;
+  }
+  if (cli->show_help) {
+    config::PrintAgentHelp(argv[0]);
+    return 0;
+  }
+
+  config::ResolvedConfig resolved;
+  try {
+    resolved = config::ResolveConfig(*cli);
+  } catch (const config::ResolutionError& e) {
+    logger->Log(LogLevel::ERROR_LEVEL, "{}", e.what());
+    return 1;
+  }
+
   install_signal_handlers();
   try {
-    auto config = config::ConfigLoader::LoadConfig();
+    auto agent_config = config::ConfigLoader::LoadConfig(resolved.path);
+    logger = logging::BuildLogger(agent_config);
+
+    if (resolved.source == config::ConfigSource::kBuiltinDefaults) {
+      logger->Log(LogLevel::INFO_LEVEL, "Config source: {}",
+                  config::ConfigSourceToString(resolved.source));
+    } else {
+      logger->Log(LogLevel::INFO_LEVEL, "Config source: {} ({})",
+                  config::ConfigSourceToString(resolved.source),
+                  resolved.path->string());
+    }
+
+    collectors::CollectorRegistry::Instance().SetLoggers(*logger);
 
     auto active_collectors = collectors::CollectorRegistry::Instance().Resolve(
-        config.requestedMetrics);
+        agent_config.requestedMetrics);
 
     std::shared_ptr<MetricsBuffer> buffer =
-        std::make_shared<MetricsBuffer>(config);
-    Scheduler scheduler(config, std::move(active_collectors), buffer);
+        std::make_shared<MetricsBuffer>(agent_config);
+    Scheduler scheduler(agent_config, std::move(active_collectors), buffer,
+                        logger->WithName("Scheduler"));
 
-    std::jthread grpc_thread([&scheduler, &config, &buffer]() {
-      if (auto channel = client::Client::CreateChannel(
-              config.server_address + ":" +
-              std::to_string(config.server_port))) {
-        client::Client grpc_client(channel, config, buffer);
-        grpc_client.Connect();
-      } else {
-        std::cerr
-            << "Failed to create gRPC channel, falling back to local dashboard"
-            << std::endl;
-        scheduler.print_dashboard.store(true);
-      }
-    });
+    auto grpc_logger = logger->WithName("gRPC");
+    std::jthread grpc_thread(
+        [logger = std::move(grpc_logger), &agent_config, &buffer]() {
+          if (auto channel = client::Client::CreateChannel(
+                  agent_config.server_address + ":" +
+                  std::to_string(agent_config.server_port))) {
+            client::Client grpc_client(channel, agent_config, buffer,
+                                       logger->WithName("gRPC Client"));
+            grpc_client.Connect();
+          } else {
+            logger->Log(LogLevel::ERROR_LEVEL, "Failed to create gRPC channel");
+          }
+        });
 
     scheduler.Run();
 
   } catch (const std::exception& e) {
-    std::cerr << "CRITICAL ERROR: " << e.what() << std::endl;
+    logger->Log(LogLevel::ERROR_LEVEL, "Critical error: {}", e.what());
     return 1;
   }
-  std::cout << "Agent exited successfully" << std::endl;
+  logger->Log(LogLevel::INFO_LEVEL, "Agent exited successfully");
   return 0;
 }
 
@@ -98,6 +177,9 @@ int main(int argc, const char* argv[]) {
   if (program_name.ends_with("volta"))
     return cli_mode(argc, argv);
   else if (program_name.ends_with("voltad"))
-    return agent_mode();
+    return agent_mode(argc, argv);
+  std::cerr << "This is a busy box style binary.\nLink it as \"volta\" or "
+               "\"voltad\" to run."
+            << std::endl;
   return 1;
 }

@@ -15,6 +15,7 @@ find_package(protobuf CONFIG REQUIRED)
 find_package(gRPC CONFIG REQUIRED)
 find_package(fmt CONFIG REQUIRED)
 find_package(tomlplusplus CONFIG REQUIRED)
+find_package(spdlog CONFIG REQUIRED)
 find_package(Threads REQUIRED)
 
 # --- Proto / gRPC code generation ---
@@ -99,6 +100,7 @@ target_link_libraries(volta_lib PUBLIC
     Threads::Threads
     fmt::fmt
     tomlplusplus::tomlplusplus
+    spdlog::spdlog
     ${CMAKE_DL_LIBS}
 )
 
@@ -125,7 +127,7 @@ else()
         COMMAND ${CMAKE_COMMAND} -E copy_if_different
             ${CMAKE_SOURCE_DIR}/agent.conf
             ${CMAKE_CURRENT_BINARY_DIR}/agent.conf
-        COMMENT "Copying agent.conf..."
+        COMMENT "Copying agent.conf to build directory"
     )
 endif()
 
@@ -146,6 +148,9 @@ if(BUILD_TESTING)
     add_executable(volta_tests)
     target_sources(volta_tests PRIVATE
         tests/series_buffer_test.cc
+        tests/config_resolution_test.cc
+        tests/control_command_test.cc
+        tests/control_socket_test.cc
     )
     target_link_libraries(volta_tests PRIVATE
         volta_lib
@@ -188,7 +193,7 @@ if(GIT_EXE)
         OUTPUT_VARIABLE GIT_ROOT
         OUTPUT_STRIP_TRAILING_WHITESPACE
     )
-    if(EXISTS ${GIT_ROOT}/.git)
+    if(IS_DIRECTORY ${GIT_ROOT}/.git)
         configure_file(
             ${GIT_ROOT}/scripts/hooks/pre-commit
             ${GIT_ROOT}/.git/hooks/pre-commit

@@ -2,7 +2,6 @@
 
 #include <algorithm>
 #include <chrono>
-#include <iostream>
 
 namespace volta {
 namespace agent {
@@ -19,22 +18,22 @@ NvmlCollector::~NvmlCollector() {
 bool NvmlCollector::Init() {
   const platform::NvmlApi* nvml = platform::TryLoadNvml();
   if (nvml == nullptr) {
-    std::cerr << "Failed to load NVML: " << platform::NvmlLoadError()
-              << std::endl;
+    logger_->Log(logging::LogLevel::WARNING_LEVEL, "Failed to load NVML: {}",
+                 platform::NvmlLoadError());
     return false;
   }
 
   nvmlReturn_t result = nvml->Init();
   if (result != NVML_SUCCESS) {
-    std::cerr << "Failed to initialize NVML: " << nvml->ErrorString(result)
-              << std::endl;
+    logger_->Log(logging::LogLevel::WARNING_LEVEL,
+                 "Failed to initialize NVML: {}", nvml->ErrorString(result));
     return false;
   }
 
   result = nvml->DeviceGetHandleByIndex(0, &device_handle_);
   if (result != NVML_SUCCESS) {
-    std::cerr << "Failed to get device handle: " << nvml->ErrorString(result)
-              << std::endl;
+    logger_->Log(logging::LogLevel::WARNING_LEVEL,
+                 "Failed to get device handle: {}", nvml->ErrorString(result));
     nvml->Shutdown();
     return false;
   }
@@ -42,8 +41,8 @@ bool NvmlCollector::Init() {
   nvmlPciInfo_t pci_info;
   result = nvml->DeviceGetPciInfo(device_handle_, &pci_info);
   if (result != NVML_SUCCESS) {
-    std::cerr << "Failed to get PCI info: " << nvml->ErrorString(result)
-              << std::endl;
+    logger_->Log(logging::LogLevel::WARNING_LEVEL, "Failed to get PCI info: {}",
+                 nvml->ErrorString(result));
     nvml->Shutdown();
     return false;
   }

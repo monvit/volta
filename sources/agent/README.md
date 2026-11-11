@@ -55,13 +55,23 @@ To configure without tests: `cmake -B build -S . --preset default -DBUILD_TESTIN
 
 ```bash
 # May require root/admin privileges to access RAPL/Affinity features.
-./build/voltad
+./build/voltad --config agent.conf
 ```
 
 ## Agent Configuration
 
-The agent reads its configuration from `agent.conf` in the current working directory.
-If the file is missing, the agent starts with built-in defaults.
+`voltad` looks for configuration in this order:
+
+1. `--config PATH`
+2. `$VOLTA_CONFIG`
+3. `/etc/volta/agent.conf` (optional; missing → built-in defaults)
+4. built-in defaults
+
+For local builds, pass the config explicitly:
+
+```bash
+./build/voltad --config agent.conf
+```
 
 You can use `sources/agent/agent.example.conf` as a starting point.
 
@@ -76,6 +86,8 @@ You can use `sources/agent/agent.example.conf` as a starting point.
   Metric names may be written with or without the `METRIC_TYPE_` prefix.
 - `time_window` — buffering window in seconds (`float`), and it must be
   greater than the collection interval.
+- `log_level` — minimum log level: `trace` (or `noisy`), `debug`, `info`,
+  `warning` (or `warn`), or `error`. Defaults to `info`.
 
 ### Example
 
@@ -85,6 +97,7 @@ interval = 500
 server_address = "localhost"
 server_port = 5000
 time_window = 2.0
+log_level = "info"
 
 metrics = [
   "METRIC_TYPE_CPU_POWER_PACKAGE",

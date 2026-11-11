@@ -20,6 +20,7 @@ class RaplCollector final : public RegisteredCollector<RaplCollector> {
   bool IsSupported() override;
   std::vector<MetricType> Satisfiable() override;
   void SetRequestedMetrics(const std::vector<MetricType>& metrics) override;
+  std::string_view GetName() override { return "RAPL Collector"; }
 
  private:
   struct PackageZone {

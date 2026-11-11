@@ -3,10 +3,12 @@
 
 #include <filesystem>
 #include <map>
+#include <optional>
 #include <set>
 #include <toml++/toml.hpp>
 
 #include "config/config.h"
+#include "logger/logger.h"
 
 namespace volta {
 namespace agent {
@@ -14,7 +16,7 @@ namespace config {
 
 class ConfigLoader {
  public:
-  static Config LoadConfig();
+  static Config LoadConfig(const std::optional<std::filesystem::path>& file);
   static Config LoadDefaultConfig();
 
  private:
@@ -24,7 +26,8 @@ class ConfigLoader {
   void operator=(const ConfigLoader&) = delete;
   void operator=(ConfigLoader&&) = delete;
 
-  static void LoadConfigFile(Config& out_config);
+  static void LoadConfigFile(const std::filesystem::path& path,
+                             Config& out_config);
   static void CreateUUID(Config& out_config);
   static void LoadCoreAffinity(toml::table& tbl, Config& out_config);
   static void LoadInterval(toml::table& tbl, Config& out_config);
@@ -32,10 +35,10 @@ class ConfigLoader {
   static void LoadServerPort(toml::table& tbl, Config& out_config);
   static void LoadMetrics(toml::table& tbl, Config& out_config);
   static void LoadTimeWindow(toml::table& tbl, Config& out_config);
+  static void LoadLogging(toml::table& tbl, Config& out_config);
   static void CheckKeys(toml::table& tbl);
 
-  static std::filesystem::path kConfigFile;
-  static std::filesystem::path kUUIDFile;
+  static std::unique_ptr<logging::Logger> logger_;
   static std::set<std::string_view, std::less<>> kValidTopLevelKeys;
 };
 

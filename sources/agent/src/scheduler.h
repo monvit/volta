@@ -9,8 +9,9 @@
 #include "buffer.h"
 #include "collectors/collector.h"
 #include "config/config.h"
+#include "control/control_socket.h"
 #include "exporter.h"
-#include "message_queue.h"
+#include "logger/logger.h"
 #include "metric.h"
 
 extern volatile sig_atomic_t g_running;
@@ -22,7 +23,8 @@ class Scheduler {
  public:
   explicit Scheduler(const config::Config& config,
                      std::vector<collectors::Collector*>&& collectors,
-                     std::shared_ptr<MetricsBuffer> buffer);
+                     std::shared_ptr<MetricsBuffer> buffer,
+                     std::unique_ptr<logging::Logger> logger);
 
   void Run();
 
@@ -32,11 +34,12 @@ class Scheduler {
   void PrintDashboard();
   static std::string DescribeKey(const BufferKey& key);
 
+  std::unique_ptr<logging::Logger> logger_;
   std::vector<collectors::Collector*> collectors_;
   const config::Config& config_;
   std::shared_ptr<MetricsBuffer> buffer_;
-  MessageQueue ms_queue_;
   Exporter exporter_;
+  control::ControlSocket control_socket_;
 };
 
 }  // namespace agent
