@@ -1,0 +1,15 @@
+.git
+.cache
+.helix
+.vscode
+.idea
+**/build
+**/node_modules
+**/dist
+**/logs
+sources/agent
+sources/dashboard
+sources/server/server.conf
+sources/server/.env
+sources/server/pb
+docs

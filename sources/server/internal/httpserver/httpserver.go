@@ -4,7 +4,9 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"math"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -13,6 +15,7 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	commandrouter "github.com/monvit/volta/server/internal/commandRouter"
+	dbstore "github.com/monvit/volta/server/internal/db"
 	"github.com/monvit/volta/server/internal/hub"
 	"github.com/monvit/volta/server/internal/logger"
 	"github.com/monvit/volta/server/internal/registry"
@@ -25,6 +28,7 @@ type HTTPServer struct {
 	registry       *registry.AgentRegistry
 	router         *commandrouter.CommandRouter
 	hub            *hub.WSHub
+	store          *dbstore.Store
 	allowedOrigins []string
 	mux            *chi.Mux
 }
@@ -33,12 +37,14 @@ func NewHTTPServer(
 	registry *registry.AgentRegistry,
 	router *commandrouter.CommandRouter,
 	hub *hub.WSHub,
+	store *dbstore.Store,
 	allowedOrigins []string,
 ) *HTTPServer {
 	s := &HTTPServer{
 		registry:       registry,
 		router:         router,
 		hub:            hub,
+		store:          store,
 		allowedOrigins: allowedOrigins,
 	}
 	s.mux = s.routes()
@@ -60,6 +66,7 @@ func (s *HTTPServer) routes() *chi.Mux {
 
 	mux.Route("/api", func(r chi.Router) {
 		r.Get("/agents", s.HandleListAgents)
+		r.Get("/agents/{id}/metrics", s.HandleAgentMetrics)
 		r.Post("/agents/{id}/stream", s.HandleStreamData)
 		r.Post("/agents/{id}/send", s.HandleSendData)
 	})
@@ -133,6 +140,58 @@ func (s *HTTPServer) HandleListAgents(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, &pbt.ListAgentsResponse{Agents: agents})
 }
 
+// GET /api/agents/{id}/metrics
+func (s *HTTPServer) HandleAgentMetrics(w http.ResponseWriter, r *http.Request) {
+	if s.store == nil {
+		http.Error(w, "database is disabled", http.StatusServiceUnavailable)
+		return
+	}
+
+	agentID := chi.URLParam(r, "id")
+
+	from, to, err := parseTimeRange(r)
+	if err != nil {
+		http.Error(w, "invalid from/to timestamps", http.StatusBadRequest)
+		return
+	}
+
+	var metricType *int16
+	if raw := r.URL.Query().Get("metric_type"); raw != "" {
+		v, err := strconv.Atoi(raw)
+		if err != nil || v < 0 || v > math.MaxInt16 {
+			http.Error(w, "invalid metric_type", http.StatusBadRequest)
+			return
+		}
+		mt := int16(v)
+		metricType = &mt
+	}
+
+	limit := 1000
+	if raw := r.URL.Query().Get("limit"); raw != "" {
+		v, err := strconv.Atoi(raw)
+		if err != nil || v <= 0 {
+			http.Error(w, "invalid limit", http.StatusBadRequest)
+			return
+		}
+		limit = v
+	}
+
+	points, err := s.store.Query(r.Context(), dbstore.QueryOptions{
+		AgentID:    agentID,
+		MetricType: metricType,
+		From:       from,
+		To:         to,
+		Limit:      limit,
+	})
+	if err != nil {
+		logger.Error("db query failed: %v", err)
+		http.Error(w, "internal server error", http.StatusInternalServerError)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{"points": points})
+}
+
 // POST /api/agents/{id}/stream
 func (s *HTTPServer) HandleStreamData(w http.ResponseWriter, r *http.Request) {
 	agentID := chi.URLParam(r, "id")
@@ -203,4 +262,27 @@ func readBody(r *http.Request) []byte {
 	defer r.Body.Close()
 	data, _ := io.ReadAll(r.Body)
 	return data
+}
+
+func parseTimeRange(r *http.Request) (time.Time, time.Time, error) {
+	to := time.Now()
+	from := to.Add(-time.Hour)
+
+	for _, v := range r.URL.Query()["from"] {
+		t, err := time.Parse(time.RFC3339Nano, v)
+		if err != nil {
+			return time.Time{}, time.Time{}, err
+		}
+		from = t
+	}
+
+	for _, v := range r.URL.Query()["to"] {
+		t, err := time.Parse(time.RFC3339Nano, v)
+		if err != nil {
+			return time.Time{}, time.Time{}, err
+		}
+		to = t
+	}
+
+	return from.UTC(), to.UTC(), nil
 }

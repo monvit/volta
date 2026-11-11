@@ -7,6 +7,7 @@ import (
 
 	"github.com/google/uuid"
 	controlmessage "github.com/monvit/volta/server/internal/controlMessage"
+	dbstore "github.com/monvit/volta/server/internal/db"
 	eventbus "github.com/monvit/volta/server/internal/eventBus"
 	"github.com/monvit/volta/server/internal/logger"
 	"github.com/monvit/volta/server/internal/registry"
@@ -29,12 +30,14 @@ type GRPCServer struct {
 
 	registry *registry.AgentRegistry
 	bus      *eventbus.EventBus
+	store    *dbstore.Store
 }
 
-func New(registry *registry.AgentRegistry, bus *eventbus.EventBus) *grpc.Server {
+func New(registry *registry.AgentRegistry, bus *eventbus.EventBus, store *dbstore.Store) *grpc.Server {
 	srv := &GRPCServer{
 		registry: registry,
 		bus:      bus,
+		store:    store,
 	}
 
 	grpcSrv := grpc.NewServer(
@@ -176,6 +179,10 @@ func (s *GRPCServer) StreamMetrics(stream pb.VoltaCollector_StreamMetricsServer)
 
 		// TODO: validate batch
 		s.bus.Publish(id, batch)
+
+		if s.store != nil {
+			s.store.Ingest(id, batch)
+		}
 
 		ack := &types.BatchAck{
 			BatchId:         batch.Id,

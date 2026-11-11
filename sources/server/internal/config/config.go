@@ -18,11 +18,14 @@ import (
 )
 
 const (
-	ADDR_DEFAULT     = "0.0.0.0"
-	GRPCPORT_DEFAULT = 5000
-	RESTPORT_DEFAULT = 8080
-	BUFSIZE_DEFAULT  = 16
-	LOGLEVEL_DEFAULT = logger.INFO
+	ADDR_DEFAULT              = "0.0.0.0"
+	GRPCPORT_DEFAULT          = 5000
+	RESTPORT_DEFAULT          = 8080
+	BUFSIZE_DEFAULT           = 16
+	LOGLEVEL_DEFAULT          = logger.INFO
+	DEFAULT_DB_MAX_CONNS      = 8
+	DEFAULT_DB_MAX_IDLE       = 2
+	DEFAULT_DB_RETENTION_DAYS = 30
 
 	SYS_CONF   = "/etc/volta/server.conf"
 	LOCAL_CONF = "server.conf"
@@ -40,6 +43,7 @@ type Config struct {
 	REST RESTConfig   `koanf:"rest"`
 	Buf  BufferConfig `koanf:"buf"`
 	Log  LogConfig    `koanf:"log"`
+	DB   DBConfig     `koanf:"db"`
 }
 
 type GRPCConfig struct {
@@ -61,6 +65,14 @@ type LogConfig struct {
 	Level logger.Level `koanf:"level"`
 }
 
+type DBConfig struct {
+	Enabled   bool   `koanf:"enabled"`
+	DSN       string `koanf:"dsn"`
+	MaxConns  int    `koanf:"max_conns"`
+	MaxIdle   int    `koanf:"max_idle"`
+	Retention int    `koanf:"retention_days"`
+}
+
 func Default() *Config {
 	return &Config{
 		GRPC: GRPCConfig{
@@ -77,6 +89,12 @@ func Default() *Config {
 		},
 		Log: LogConfig{
 			Level: LOGLEVEL_DEFAULT,
+		},
+		DB: DBConfig{
+			Enabled:   false,
+			MaxConns:  DEFAULT_DB_MAX_CONNS,
+			MaxIdle:   DEFAULT_DB_MAX_IDLE,
+			Retention: DEFAULT_DB_RETENTION_DAYS,
 		},
 	}
 }
@@ -131,6 +149,12 @@ func Load() (*Config, error) {
 	f.StringSlice("rest.origins", DefaultAllowedOrigins, "")
 	f.Uint("buf.size", BUFSIZE_DEFAULT, "")
 
+	f.Bool("db.enabled", false, "")
+	f.String("db.dsn", "", "")
+	f.Int("db.max_conns", DEFAULT_DB_MAX_CONNS, "")
+	f.Int("db.max_idle", DEFAULT_DB_MAX_IDLE, "")
+	f.Int("db.retention_days", DEFAULT_DB_RETENTION_DAYS, "")
+
 	if err := f.Parse(os.Args[1:]); err != nil {
 		errs = append(errs, fmt.Errorf("flags parse: %w", err))
 	}
@@ -149,6 +173,20 @@ func Load() (*Config, error) {
 	// validation
 	if cfg.GRPC.Port == cfg.REST.Port {
 		errs = append(errs, fmt.Errorf("gRPC and REST ports cannot be same"))
+	}
+
+	if cfg.DB.Enabled && cfg.DB.DSN == "" {
+		errs = append(errs, fmt.Errorf("db.enabled requires db.dsn (or DB_DSN) to be set"))
+	}
+
+	if cfg.DB.MaxConns < 1 {
+		cfg.DB.MaxConns = DEFAULT_DB_MAX_CONNS
+	}
+	if cfg.DB.MaxIdle < 0 {
+		cfg.DB.MaxIdle = DEFAULT_DB_MAX_IDLE
+	}
+	if cfg.DB.Retention < 1 {
+		cfg.DB.Retention = DEFAULT_DB_RETENTION_DAYS
 	}
 
 	if len(errs) > 0 {

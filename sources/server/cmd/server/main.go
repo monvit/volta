@@ -13,6 +13,7 @@ import (
 
 	commandrouter "github.com/monvit/volta/server/internal/commandRouter"
 	"github.com/monvit/volta/server/internal/config"
+	dbstore "github.com/monvit/volta/server/internal/db"
 	eventbus "github.com/monvit/volta/server/internal/eventBus"
 	"github.com/monvit/volta/server/internal/httpserver"
 	"github.com/monvit/volta/server/internal/hub"
@@ -38,6 +39,39 @@ func main() {
 	logger.SetLevel(cfg.Log.Level)
 	logger.Info("starting server with config: %+v", cfg)
 
+	// database
+	var store *dbstore.Store
+	if cfg.DB.Enabled {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		store, err = dbstore.Open(ctx, cfg.DB)
+		cancel()
+		if err != nil {
+			logger.Error("database: %v", err)
+			os.Exit(1)
+		}
+		defer store.Close()
+
+		migrator, err := dbstore.NewMigrator(cfg.DB.DSN)
+		if err != nil {
+			logger.Error("database: %v", err)
+			os.Exit(1)
+		}
+		ctx, cancel = context.WithTimeout(context.Background(), 10*time.Second)
+		pending, err := migrator.HasPending(ctx)
+		cancel()
+		migrator.Close()
+		if err != nil {
+			logger.Error("database: %v", err)
+			os.Exit(1)
+		}
+		if pending {
+			logger.Error("database schema has pending migrations; run `make db-migrate` (or `go run ./cmd/migrate up`) first")
+			os.Exit(1)
+		}
+
+		logger.Info("database connected, retention %v days", cfg.DB.Retention)
+	}
+
 	// dependencies
 	registry := &registry.AgentRegistry{}
 	bus := eventbus.New()
@@ -46,7 +80,7 @@ func main() {
 	go hub.Run()
 
 	// gRPC
-	grpcSrv := server.New(registry, bus)
+	grpcSrv := server.New(registry, bus, store)
 	lis, err := net.Listen("tcp", net.JoinHostPort(cfg.GRPC.Addr, strconv.Itoa(int(cfg.GRPC.Port))))
 	if err != nil {
 		logger.Error("cannot bind gRPC: %v", err)
@@ -60,7 +94,7 @@ func main() {
 	}()
 
 	// HTTP
-	httpSrv := httpserver.NewHTTPServer(registry, router, hub, cfg.REST.AllowedOrigins)
+	httpSrv := httpserver.NewHTTPServer(registry, router, hub, store, cfg.REST.AllowedOrigins)
 	srv := &http.Server{
 		Addr:         net.JoinHostPort(cfg.REST.Addr, strconv.Itoa(int(cfg.REST.Port))),
 		Handler:      httpSrv,

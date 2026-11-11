@@ -1,0 +1,48 @@
+services:
+  timescaledb:
+    image: timescale/timescaledb:latest-pg17
+    environment:
+      POSTGRES_USER: volta
+      POSTGRES_PASSWORD: volta
+      POSTGRES_DB: volta
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U volta -d volta"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    volumes:
+      - volta_timescale:/var/lib/postgresql/data
+    restart: unless-stopped
+
+  migrate:
+    image: volta-server:local
+    build:
+      context: .
+      dockerfile: sources/server/Dockerfile
+    depends_on:
+      timescaledb:
+        condition: service_healthy
+    environment:
+      DB_DSN: postgres://volta:volta@timescaledb:5432/volta?sslmode=disable
+    command: ["volta-migrate", "up"]
+    restart: "no"
+
+  server:
+    image: volta-server:local
+    build:
+      context: .
+      dockerfile: sources/server/Dockerfile
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    environment:
+      DB_ENABLED: "true"
+      DB_DSN: postgres://volta:volta@timescaledb:5432/volta?sslmode=disable
+      DB_RETENTION_DAYS: "30"
+    ports:
+      - "5000:5000"
+      - "8080:8080"
+    restart: unless-stopped
+
+volumes:
+  volta_timescale:
