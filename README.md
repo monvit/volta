@@ -48,6 +48,8 @@ Follow the dedicated setup steps in respective READMEs.
 - [Server](/sources/server/README.md)
 - [Dashboard](/sources/dashboard/README.md)
 
+The server can optionally persist metrics to TimescaleDB. See the [Database section](sources/server/README.md#database-timescaledb) in the server README for local and Docker setups.
+
 ### 4. Git Hooks (Optional)
 
 ```bash
