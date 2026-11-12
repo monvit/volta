@@ -131,9 +131,14 @@ func Load() (*Config, error) {
 		}
 	}
 
-	// ENV → dot notation
+	// ENV → dot notation: only the first underscore separates the section from
+	// the key, so DB_RETENTION_DAYS maps to db.retention_days (not db.retention.days).
 	if err := k.Load(env.Provider("", ".", func(s string) string {
-		return strings.ToLower(strings.ReplaceAll(s, "_", "."))
+		s = strings.ToLower(s)
+		if i := strings.IndexByte(s, '_'); i >= 0 {
+			return s[:i] + "." + s[i+1:]
+		}
+		return s
 	}), nil); err != nil {
 		errs = append(errs, fmt.Errorf("env config: %w", err))
 	}
