@@ -125,6 +125,7 @@ the installed binary (for example `/usr/bin/voltad`):
 cmake -S . -B build --preset default -DCMAKE_INSTALL_PREFIX=/usr
 cmake --build build
 sudo cmake --install build
+sudo systemd-sysusers                 # creates the volta user/group from sysusers.d
 sudo systemctl daemon-reload
 sudo /usr/bin/volta config init       # creates /etc/volta/agent.conf, no overwrite
 sudo editor /etc/volta/agent.conf    # set your collector server as needed

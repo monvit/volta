@@ -132,6 +132,10 @@ configure_file(systemd/volta-agent.service.in
 install(FILES ${CMAKE_CURRENT_BINARY_DIR}/volta-agent.service
     DESTINATION lib/systemd/system
 )
+install(FILES systemd/volta.sysusers.conf
+    DESTINATION lib/sysusers.d
+    RENAME volta.conf
+)
 
 # --- Config file ---
 if(NOT EXISTS ${CMAKE_SOURCE_DIR}/agent.conf)
