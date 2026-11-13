@@ -57,10 +57,10 @@ To configure without tests: `cmake -B build -S . --preset default -DBUILD_TESTIN
 ./build/voltad --config agent.conf
 ```
 
-A local daemon uses your `$XDG_RUNTIME_DIR` for its control socket. RAPL
-collection reads Linux powercap sysfs counters and normally needs no elevated
-privileges; see the system-service notes below if your kernel restricts those
-read-only files.
+A local daemon uses your `$XDG_RUNTIME_DIR` for its control socket. Since
+Linux 5.10, only root can read the RAPL `energy_uj` counters, so a daemon run
+as your user collects no CPU package power and logs no error. The systemd
+service below grants the capability it needs.
 
 ## Agent Configuration
 
@@ -113,10 +113,12 @@ Unknown top-level keys are ignored with a warning.
 
 ## Install and Run as a systemd Service
 
-The install uses FHS paths: binaries in `bin`, the example configuration in
-`share/volta`, and `volta-agent.service` in `lib/systemd/system`. The service
-runs with a private, dynamically allocated, non-root systemd UID. Its runtime
-socket is `/run/volta/control.sock`; writable state is under `/var/lib/volta`.
+The install uses FHS paths: binaries in `bin`, the
+example configuration in `share/volta`, `volta-agent.service` in
+`lib/systemd/system`, and the `volta` user definition in `lib/sysusers.d`.
+The service runs as the unprivileged `volta` user. Its control socket is
+`/run/volta/control.sock`, and its state (`agent.uuid` and export dumps) is
+in `/var/lib/volta`.
 
 Configure the install prefix before building so the generated unit points to
 the installed binary (for example `/usr/bin/voltad`):
@@ -132,19 +134,18 @@ sudo editor /etc/volta/agent.conf    # set your collector server as needed
 sudo systemctl enable --now volta-agent
 ```
 
-The agent reads config in this order: `--config PATH`, `$VOLTA_CONFIG`,
-`/etc/volta/agent.conf`, then built-in defaults. `VOLTA_CONFIG` also overrides
-the system config for the service when set in its environment. `volta config
-init [PATH]` serializes the built-in defaults to TOML and refuses to replace
-an existing file. `cmake` exposes `VOLTA_CONFIG_PATH` to select a different
-compiled-in default path.
+`volta config init [PATH]` writes the built-in defaults as TOML and refuses
+to replace an existing file. To point the service at another file, set
+`VOLTA_CONFIG` with `systemctl edit volta-agent`. The file must be outside
+`/home`, because the unit hides it. To compile in a different default path,
+configure with `-DVOLTA_CONFIG_PATH=/path/to/agent.conf`.
 
-The service deliberately has no capabilities and does not run as root. It
-only reads the RAPL `energy_uj` counters under `/sys/class/powercap`, which are
-world-readable on standard Linux powercap setups. If your distribution changes
-those attributes to root-only, grant read access to the powercap counters via
-your platform's udev policy rather than running the whole agent as root or
-adding broad DAC-bypass capabilities.
+The service does not run as root. It holds one capability,
+`CAP_DAC_READ_SEARCH`, because since Linux 5.10 (CVE-2020-8694) only root can
+read `energy_uj` under `/sys/class/powercap`. The capability lets the agent
+read any file, but grants no write access. The agent can write only to
+`/run/volta` and `/var/lib/volta`, and of the device nodes NVML can open
+only `/dev/nvidia*`.
 
 ### Service smoke test
 
@@ -153,22 +154,28 @@ systemctl is-active --quiet volta-agent
 systemctl status volta-agent --no-pager
 journalctl -u volta-agent -n 30 --no-pager
 
-# Exercise the service's Unix datagram control socket (root can access it).
-sudo /usr/bin/volta export start
+# Members of the volta group can use the control socket.
+sudo usermod -aG volta "$USER"   # log out and back in for the group to apply
+volta export start
 sleep 2
-sudo /usr/bin/volta export stop
+volta export stop
+ls /var/lib/volta/dumps
 ```
 
-Control commands use `/run/volta/control.sock` for the system service. Set
-`VOLTA_CONTROL_SOCKET=/absolute/socket/path` to override it. The service
-socket is mode `0660`; root can control it by default.
+The CLI uses `/run/volta/control.sock` whenever `/run/volta` exists. Set
+`VOLTA_CONTROL_SOCKET=/absolute/socket/path` to use a different socket. The
+socket is mode `0660` in a `0750` directory, both owned by `volta:volta`, so
+root and members of `volta` can control the service. The service writes
+dumps to `/var/lib/volta/dumps` and can't write an export anywhere else.
 
-### FAQ 
+### FAQ
+
 **Q: Do I have to enter `vcpkg install`?**
 **A:** No, project is working in Manifest Mode. CMake automatically reads the `vcpkg.json` file and installs whats needed in isolated environment inside build directory.
 
 **Q: I changed `vcpkg.json`, but build see no difference.**
 **A:** Clean up CMake cache, and build project once again:
+
 ```bash
 rm -rf build
 cmake -B build -S .
