@@ -1,0 +1,54 @@
+[Unit]
+Description=Volta system monitoring agent
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=exec
+ExecStart=@CMAKE_INSTALL_FULL_BINDIR@/voltad
+Restart=on-failure
+RestartSec=5s
+
+User=volta
+Group=volta
+SupplementaryGroups=video
+
+RuntimeDirectory=volta
+RuntimeDirectoryMode=0750
+StateDirectory=volta volta/dumps
+StateDirectoryMode=0750
+WorkingDirectory=%S/volta
+UMask=0027
+
+AmbientCapabilities=CAP_DAC_READ_SEARCH
+CapabilityBoundingSet=CAP_DAC_READ_SEARCH
+NoNewPrivileges=yes
+
+DevicePolicy=closed
+DeviceAllow=char-nvidia* rw
+
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateIPC=yes
+ProtectProc=invisible
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+RemoveIPC=yes
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+SystemCallFilter=~@privileged
+SystemCallErrorNumber=EPERM
+
+[Install]
+WantedBy=multi-user.target

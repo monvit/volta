@@ -5,6 +5,7 @@
 #include <map>
 #include <optional>
 #include <set>
+#include <string>
 #include <toml++/toml.hpp>
 
 #include "config/config.h"
@@ -18,6 +19,7 @@ class ConfigLoader {
  public:
   static Config LoadConfig(const std::optional<std::filesystem::path>& file);
   static Config LoadDefaultConfig();
+  static std::string SerializeConfig(const Config& config);
 
  private:
   ConfigLoader() = delete;

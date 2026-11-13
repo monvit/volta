@@ -1,6 +1,7 @@
 #ifndef VOLTA_AGENT_SRC_COLLECTORS_COLLECTOR_H_
 #define VOLTA_AGENT_SRC_COLLECTORS_COLLECTOR_H_
 
+#include <algorithm>
 #include <vector>
 
 #include "logger/logger.h"
@@ -45,6 +46,20 @@ class CollectorRegistry {
 
   void Register(std::unique_ptr<Collector> collector) {
     entries_.push_back(std::move(collector));
+  }
+
+  std::vector<MetricType> SatisfiableMetrics() const {
+    std::vector<MetricType> metrics;
+    for (const auto& collector : entries_) {
+      for (const auto metric : collector->Satisfiable()) {
+        if (std::find(metrics.begin(), metrics.end(), metric) ==
+            metrics.end()) {
+          metrics.push_back(metric);
+        }
+      }
+    }
+    std::sort(metrics.begin(), metrics.end());
+    return metrics;
   }
 
   std::vector<Collector*> Resolve(const std::vector<MetricType>& desired) {
