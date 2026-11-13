@@ -78,7 +78,7 @@ std::filesystem::path ResolveDaemon() {
   throw ControlPathError(kMissingRuntimeMessage);
 }
 
-std::filesystem::path ResolveCli() {
+std::filesystem::path ResolveCli(const std::filesystem::path& system_socket) {
   if (auto override_path = Env(kControlSocketEnv)) {
     return RequireAbsolute(*override_path);
   }
@@ -92,7 +92,6 @@ std::filesystem::path ResolveCli() {
   }
   // Prefer a running system service over a per-user socket when both are
   // available. Otherwise keep local development behavior via XDG_RUNTIME_DIR.
-  const std::filesystem::path system_socket = "/run/volta/control.sock";
   if (IsDir(system_socket.parent_path())) return system_socket;
   if (auto xdg = Env(kXdgRuntimeDirEnv)) return XdgSocket(*xdg);
   // Matches RuntimeDirectory=volta in the installed systemd unit.
@@ -101,9 +100,10 @@ std::filesystem::path ResolveCli() {
 
 }  // namespace
 
-std::filesystem::path ResolveControlSocketPath(ControlPathSide side) {
+std::filesystem::path ResolveControlSocketPath(
+    ControlPathSide side, const std::filesystem::path& system_socket) {
   if (side == ControlPathSide::kDaemon) return ResolveDaemon();
-  return ResolveCli();
+  return ResolveCli(system_socket);
 }
 
 }  // namespace control

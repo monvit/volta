@@ -242,33 +242,46 @@ TEST_F(ControlSocketTest, DaemonPath) {
   }
 }
 
-TEST_F(ControlSocketTest, CliDefaultsToSystemServiceSocket) {
-  EXPECT_EQ(ResolveControlSocketPath(ControlPathSide::kCli),
-            "/run/volta/control.sock");
-}
-
-TEST_F(ControlSocketTest, CliPathUsesDaemonPrecedence) {
+TEST_F(ControlSocketTest, CliPrefersSystemSocketOverXdg) {
+  auto system_socket = dir_ / "system" / "control.sock";
+  std::filesystem::create_directory(system_socket.parent_path());
   auto xdg = dir_ / "xdg";
   std::filesystem::create_directory(xdg);
   setenv(kXdgRuntimeDirEnv, xdg.c_str(), 1);
-  EXPECT_EQ(ResolveControlSocketPath(ControlPathSide::kCli),
+  EXPECT_EQ(ResolveControlSocketPath(ControlPathSide::kCli, system_socket),
+            system_socket);
+}
+
+TEST_F(ControlSocketTest, CliFallsBackToSystemSocket) {
+  auto system_socket = dir_ / "missing-system" / "control.sock";
+  EXPECT_EQ(ResolveControlSocketPath(ControlPathSide::kCli, system_socket),
+            system_socket);
+}
+
+TEST_F(ControlSocketTest, CliPathUsesDaemonPrecedence) {
+  auto system_socket = dir_ / "missing-system" / "control.sock";
+  auto xdg = dir_ / "xdg";
+  std::filesystem::create_directory(xdg);
+  setenv(kXdgRuntimeDirEnv, xdg.c_str(), 1);
+  EXPECT_EQ(ResolveControlSocketPath(ControlPathSide::kCli, system_socket),
             xdg / "volta" / "control.sock");
   EXPECT_FALSE(std::filesystem::exists(xdg / "volta"));
 
   auto runtime = dir_ / "runtime";
   std::filesystem::create_directory(runtime);
   setenv(kRuntimeDirectoryEnv, runtime.c_str(), 1);
-  EXPECT_EQ(ResolveControlSocketPath(ControlPathSide::kCli),
+  EXPECT_EQ(ResolveControlSocketPath(ControlPathSide::kCli, system_socket),
             runtime / "control.sock");
 
   auto override_path = dir_ / "override" / "control.sock";
   setenv(kControlSocketEnv, override_path.c_str(), 1);
-  EXPECT_EQ(ResolveControlSocketPath(ControlPathSide::kCli), override_path);
+  EXPECT_EQ(ResolveControlSocketPath(ControlPathSide::kCli, system_socket),
+            override_path);
 
   unsetenv(kControlSocketEnv);
   auto missing_runtime = dir_ / "missing-runtime";
   setenv(kRuntimeDirectoryEnv, missing_runtime.c_str(), 1);
-  EXPECT_THROW(ResolveControlSocketPath(ControlPathSide::kCli),
+  EXPECT_THROW(ResolveControlSocketPath(ControlPathSide::kCli, system_socket),
                ControlPathError);
 }
 
