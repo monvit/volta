@@ -119,10 +119,8 @@ add_executable(volta src/main.cc)
 target_link_libraries(volta PRIVATE volta_lib)
 
 install(TARGETS volta RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
-install(PROGRAMS $<TARGET_FILE:volta>
-    DESTINATION ${CMAKE_INSTALL_BINDIR}
-    RENAME voltad
-)
+install(CODE "file(CREATE_LINK volta
+    \"\$ENV{DESTDIR}${CMAKE_INSTALL_FULL_BINDIR}/voltad\" SYMBOLIC)")
 install(FILES ${CMAKE_SOURCE_DIR}/agent.example.conf
     DESTINATION ${CMAKE_INSTALL_DATADIR}/volta
 )
