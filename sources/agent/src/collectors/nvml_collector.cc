@@ -12,10 +12,16 @@ NvmlCollector::NvmlCollector() = default;
 NvmlCollector::~NvmlCollector() {
   if (initialized_) {
     nvml_->Shutdown();
+    initialized_ = false;
+    nvml_ = nullptr;
   }
+  platform::UnloadNvml();
 }
 
-bool NvmlCollector::Init() {
+bool NvmlCollector::Start(const std::vector<MetricType>& metrics) {
+  requested_metrics_ = metrics;
+  if (requested_metrics_.empty()) return false;
+
   const platform::NvmlApi* nvml = platform::TryLoadNvml();
   if (nvml == nullptr) {
     logger_->Log(logging::LogLevel::WARNING_LEVEL, "Failed to load NVML: {}",
@@ -27,15 +33,35 @@ bool NvmlCollector::Init() {
   if (result != NVML_SUCCESS) {
     logger_->Log(logging::LogLevel::WARNING_LEVEL,
                  "Failed to initialize NVML: {}", nvml->ErrorString(result));
+    platform::UnloadNvml();
     return false;
+  }
+
+  auto fail_after_init = [nvml]() {
+    nvml->Shutdown();
+    platform::UnloadNvml();
+    return false;
+  };
+
+  unsigned int device_count = 0;
+  result = nvml->DeviceGetCount(&device_count);
+  if (result != NVML_SUCCESS) {
+    logger_->Log(logging::LogLevel::WARNING_LEVEL,
+                 "Failed to get NVML device count: {}",
+                 nvml->ErrorString(result));
+    return fail_after_init();
+  }
+  if (device_count == 0) {
+    logger_->Log(logging::LogLevel::DEBUG_LEVEL,
+                 "No NVIDIA devices found; disabling NVML collector");
+    return fail_after_init();
   }
 
   result = nvml->DeviceGetHandleByIndex(0, &device_handle_);
   if (result != NVML_SUCCESS) {
     logger_->Log(logging::LogLevel::WARNING_LEVEL,
                  "Failed to get device handle: {}", nvml->ErrorString(result));
-    nvml->Shutdown();
-    return false;
+    return fail_after_init();
   }
 
   nvmlPciInfo_t pci_info;
@@ -43,8 +69,7 @@ bool NvmlCollector::Init() {
   if (result != NVML_SUCCESS) {
     logger_->Log(logging::LogLevel::WARNING_LEVEL, "Failed to get PCI info: {}",
                  nvml->ErrorString(result));
-    nvml->Shutdown();
-    return false;
+    return fail_after_init();
   }
 
   GpuID gpu_id;
@@ -57,35 +82,6 @@ bool NvmlCollector::Init() {
   nvml_ = nvml;
   initialized_ = true;
   return true;
-}
-
-bool NvmlCollector::IsSupported() {
-  const platform::NvmlApi* nvml = platform::TryLoadNvml();
-  if (nvml == nullptr) {
-    return false;
-  }
-
-  nvmlReturn_t result = nvml->Init();
-  if (result != NVML_SUCCESS) {
-    return false;
-  }
-
-  unsigned int device_count = 0;
-  result = nvml->DeviceGetCount(&device_count);
-  if (result != NVML_SUCCESS || device_count == 0) {
-    nvml->Shutdown();
-    return false;
-  }
-
-  nvmlDevice_t device;
-  result = nvml->DeviceGetHandleByIndex(0, &device);
-  nvml->Shutdown();
-  return result == NVML_SUCCESS;
-}
-
-void NvmlCollector::SetRequestedMetrics(
-    const std::vector<MetricType>& metrics) {
-  requested_metrics_ = metrics;
 }
 
 std::vector<Metric> NvmlCollector::Collect() {

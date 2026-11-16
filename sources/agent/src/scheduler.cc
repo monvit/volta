@@ -34,10 +34,6 @@ Scheduler::Scheduler(const config::Config& config,
           logger_->WithName("ControlSocket")) {}
 
 void Scheduler::Run() {
-  for (auto collector : collectors_) {
-    collector->Init();
-  }
-
   logger_->Log(LogLevel::INFO_LEVEL,
                "Starting collection loop (Interval: {} ms)",
                config_.collection_interval.count());

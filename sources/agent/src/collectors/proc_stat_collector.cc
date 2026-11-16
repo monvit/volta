@@ -9,11 +9,9 @@ namespace volta {
 namespace agent {
 namespace collectors {
 
-bool ProcStatCollector::Init() { return true; }
-
-void ProcStatCollector::SetRequestedMetrics(
-    const std::vector<MetricType>& metrics) {
+bool ProcStatCollector::Start(const std::vector<MetricType>& metrics) {
   requested_metrics_ = metrics;
+  return std::filesystem::exists("/proc/stat");
 }
 
 std::vector<Metric> ProcStatCollector::Collect() {
@@ -48,10 +46,6 @@ std::vector<Metric> ProcStatCollector::Collect() {
   m.timestamp = std::chrono::system_clock::now().time_since_epoch().count();
 
   return {m};
-}
-
-bool ProcStatCollector::IsSupported() {
-  return std::filesystem::exists("/proc/stat");
 }
 
 std::vector<MetricType> ProcStatCollector::Satisfiable() {

@@ -18,19 +18,17 @@ class Collector {
 
   virtual std::vector<Metric> Collect() = 0;
 
-  virtual bool IsSupported() = 0;
-
   virtual std::vector<MetricType> Satisfiable() = 0;
 
-  virtual void SetRequestedMetrics(const std::vector<MetricType>& metrics) = 0;
+  // Configure and initialize this collector for the requested metrics.
+  // Returns false if no metrics can be collected in the current environment.
+  virtual bool Start(const std::vector<MetricType>& metrics) = 0;
 
   virtual void SetLogger(std::unique_ptr<Logger>&& logger) {
     logger_ = std::move(logger);
   }
 
   virtual std::string_view GetName() = 0;
-
-  virtual bool Init() { return true; }
 
  protected:
   std::unique_ptr<Logger> logger_;
@@ -57,8 +55,7 @@ class CollectorRegistry {
         }
       }
 
-      if (!active.empty() && collector->IsSupported()) {
-        collector->SetRequestedMetrics(active);
+      if (!active.empty() && collector->Start(active)) {
         result.push_back(collector.get());
       }
     }

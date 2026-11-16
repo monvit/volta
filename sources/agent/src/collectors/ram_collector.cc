@@ -10,13 +10,10 @@ namespace volta {
 namespace agent {
 namespace collectors {
 
-bool RamCollector::Init() {
-  initialized_ = true;
-  return true;
-}
-
-void RamCollector::SetRequestedMetrics(const std::vector<MetricType>& metrics) {
+bool RamCollector::Start(const std::vector<MetricType>& metrics) {
   requested_metrics_ = metrics;
+  initialized_ = std::filesystem::exists("/proc/meminfo");
+  return initialized_;
 }
 
 std::vector<Metric> RamCollector::Collect() {
@@ -70,10 +67,6 @@ void RamCollector::ReadStats(uint64_t& used, uint64_t& total) {
   }
 
   used = total - available;
-}
-
-bool RamCollector::IsSupported() {
-  return std::filesystem::exists("/proc/meminfo");
 }
 
 }  // namespace collectors

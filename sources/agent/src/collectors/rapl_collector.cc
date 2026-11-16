@@ -110,9 +110,8 @@ std::vector<RaplCollector::PackageZone> RaplCollector::DiscoverPackages()
   return packages;
 }
 
-bool RaplCollector::IsSupported() { return !DiscoverPackages().empty(); }
-
-bool RaplCollector::Init() {
+bool RaplCollector::Start(const std::vector<MetricType>& metrics) {
+  requested_metrics_ = metrics;
   initialized_ = false;
   auto packages = DiscoverPackages();
   if (packages.empty()) return false;
@@ -132,11 +131,6 @@ bool RaplCollector::Init() {
   last_energy_uj_ = energy;
   initialized_ = true;
   return true;
-}
-
-void RaplCollector::SetRequestedMetrics(
-    const std::vector<MetricType>& metrics) {
-  requested_metrics_ = metrics;
 }
 
 std::vector<Metric> RaplCollector::Collect() {
