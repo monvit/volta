@@ -18,11 +18,9 @@ class NvmlCollector final : public RegisteredCollector<NvmlCollector> {
   NvmlCollector(NvmlCollector&&) = default;
   NvmlCollector& operator=(NvmlCollector&&) = default;
 
-  bool Init() override;
+  bool Start(const std::vector<MetricType>& metrics) override;
   std::vector<Metric> Collect() override;
-  bool IsSupported() override;
   std::vector<MetricType> Satisfiable() override;
-  void SetRequestedMetrics(const std::vector<MetricType>& metrics) override;
   std::string_view GetName() override { return "NVML Collector"; }
 
  private:

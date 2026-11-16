@@ -59,6 +59,14 @@ bool ResolveAllSymbols(void* handle) {
 
 std::string_view NvmlLoadError() { return g_load_error; }
 
+void UnloadNvml() {
+  if (g_nvml_handle != nullptr) {
+    dlclose(g_nvml_handle);
+    g_nvml_handle = nullptr;
+  }
+  g_nvml = NvmlApi{};
+}
+
 const NvmlApi* TryLoadNvml() {
   if (g_nvml_handle != nullptr) {
     return &g_nvml;
@@ -89,6 +97,7 @@ const NvmlApi* TryLoadNvml() {
 
   if (!ResolveAllSymbols(handle)) {
     dlclose(handle);
+    g_nvml = NvmlApi{};
     return nullptr;
   }
 

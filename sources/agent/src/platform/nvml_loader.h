@@ -32,6 +32,7 @@ struct NvmlApi {
 };
 
 const NvmlApi* TryLoadNvml();
+void UnloadNvml();
 
 std::string_view NvmlLoadError();
 
