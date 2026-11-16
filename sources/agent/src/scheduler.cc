@@ -34,10 +34,6 @@ Scheduler::Scheduler(const config::Config& config,
           logger_->WithName("ControlSocket")) {}
 
 void Scheduler::Run() {
-  for (auto collector : collectors_) {
-    collector->Init();
-  }
-
   logger_->Log(LogLevel::INFO_LEVEL,
                "Starting collection loop (Interval: {} ms)",
                config_.collection_interval.count());
@@ -60,11 +56,13 @@ void Scheduler::Run() {
     }
   });
 
+  std::vector<Metric> metrics;
+  metrics.reserve(config_.requestedMetrics.size());
+
   while (g_running) {
     for (const auto& collector : collectors_) {
-      // TODO: make the metrics collect into a preallocated tray
-      //       instead of allocating new memory for each collection
-      auto metrics = collector->Collect();
+      metrics.clear();
+      collector->Collect(metrics);
       buffer_->AddMetrics(metrics);
       exporter_.Dump(metrics);
     }
