@@ -84,11 +84,10 @@ bool NvmlCollector::Start(const std::vector<MetricType>& metrics) {
   return true;
 }
 
-std::vector<Metric> NvmlCollector::Collect() {
-  if (!initialized_ || requested_metrics_.empty()) return {};
+void NvmlCollector::Collect(std::vector<Metric>& metrics) {
+  if (!initialized_ || requested_metrics_.empty()) return;
 
   const auto& nvml = *nvml_;
-  std::vector<Metric> metrics;
   unsigned int power_mw = 0;
   auto now = std::chrono::system_clock::now().time_since_epoch().count();
 
@@ -143,8 +142,6 @@ std::vector<Metric> NvmlCollector::Collect() {
            now});
     }
   }
-
-  return metrics;
 }
 
 std::vector<MetricType> NvmlCollector::Satisfiable() {

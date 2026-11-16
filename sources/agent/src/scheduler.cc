@@ -56,11 +56,13 @@ void Scheduler::Run() {
     }
   });
 
+  std::vector<Metric> metrics;
+  metrics.reserve(config_.requestedMetrics.size());
+
   while (g_running) {
     for (const auto& collector : collectors_) {
-      // TODO: make the metrics collect into a preallocated tray
-      //       instead of allocating new memory for each collection
-      auto metrics = collector->Collect();
+      metrics.clear();
+      collector->Collect(metrics);
       buffer_->AddMetrics(metrics);
       exporter_.Dump(metrics);
     }

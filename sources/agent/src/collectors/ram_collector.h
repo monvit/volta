@@ -10,7 +10,7 @@ namespace collectors {
 class RamCollector final : public RegisteredCollector<RamCollector> {
  public:
   bool Start(const std::vector<MetricType>& metrics) override;
-  std::vector<Metric> Collect() override;
+  void Collect(std::vector<Metric>& metrics) override;
   std::vector<MetricType> Satisfiable() override;
   std::string_view GetName() override { return "Ram Collector"; }
 

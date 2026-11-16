@@ -133,16 +133,16 @@ bool RaplCollector::Start(const std::vector<MetricType>& metrics) {
   return true;
 }
 
-std::vector<Metric> RaplCollector::Collect() {
-  if (!initialized_ || requested_metrics_.empty()) return {};
+void RaplCollector::Collect(std::vector<Metric>& metrics) {
+  if (!initialized_ || requested_metrics_.empty()) return;
   if (std::find(requested_metrics_.begin(), requested_metrics_.end(),
                 MetricType::METRIC_TYPE_CPU_POWER_PACKAGE) ==
       requested_metrics_.end()) {
-    return {};
+    return;
   }
 
   uint64_t energy = 0;
-  if (!ReadU64File(active_.path / "energy_uj", &energy)) return {};
+  if (!ReadU64File(active_.path / "energy_uj", &energy)) return;
 
   const uint64_t delta_uj =
       DeltaEnergyUj(energy, last_energy_uj_, active_.max_energy_range_uj);
@@ -156,7 +156,7 @@ std::vector<Metric> RaplCollector::Collect() {
   m.devId = DeviceId{std::move(cpu_id)};
   m.value = static_cast<double>(delta_uj) / kMicrojoulesPerJoule;
   m.timestamp = std::chrono::system_clock::now().time_since_epoch().count();
-  return {m};
+  metrics.push_back(m);
 }
 
 std::vector<MetricType> RaplCollector::Satisfiable() {
