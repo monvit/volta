@@ -16,7 +16,7 @@ namespace collectors {
 class RaplCollector final : public RegisteredCollector<RaplCollector> {
  public:
   bool Start(const std::vector<MetricType>& metrics) override;
-  std::vector<Metric> Collect() override;
+  void Collect(std::vector<Metric>& metrics) override;
   std::vector<MetricType> Satisfiable() override;
   std::string_view GetName() override { return "RAPL Collector"; }
 

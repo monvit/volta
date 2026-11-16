@@ -16,7 +16,7 @@ void Exporter::Dump(const std::vector<Metric>& metrics) {
   std::lock_guard lock(mu_);
   if (!is_exporting) return;
 
-  for (auto metric : metrics)
+  for (const auto& metric : metrics)
     dump_file_ << MetricType_Name(metric.type) << ";" << DescribeDevice(metric)
                << ";" << metric.timestamp << ";" << metric.value << "\n";
   dump_file_.flush();

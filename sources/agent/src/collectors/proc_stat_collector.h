@@ -12,7 +12,7 @@ namespace collectors {
 class ProcStatCollector final : public RegisteredCollector<ProcStatCollector> {
  public:
   bool Start(const std::vector<MetricType>& metrics) override;
-  std::vector<Metric> Collect() override;
+  void Collect(std::vector<Metric>& metrics) override;
   std::vector<MetricType> Satisfiable() override;
   std::string_view GetName() override { return "ProcStat Collector"; }
 

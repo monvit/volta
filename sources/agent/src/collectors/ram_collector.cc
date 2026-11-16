@@ -16,8 +16,8 @@ bool RamCollector::Start(const std::vector<MetricType>& metrics) {
   return initialized_;
 }
 
-std::vector<Metric> RamCollector::Collect() {
-  if (!initialized_ || requested_metrics_.empty()) return {};
+void RamCollector::Collect(std::vector<Metric>& metrics) {
+  if (!initialized_ || requested_metrics_.empty()) return;
 
   bool needs_total =
       std::find(requested_metrics_.begin(), requested_metrics_.end(),
@@ -25,14 +25,13 @@ std::vector<Metric> RamCollector::Collect() {
   bool needs_used =
       std::find(requested_metrics_.begin(), requested_metrics_.end(),
                 MetricType::METRIC_TYPE_RAM_USED) != requested_metrics_.end();
-  if (!needs_total && !needs_used) return {};
+  if (!needs_total && !needs_used) return;
 
   uint64_t used = 0;
   uint64_t total = 0;
   ReadStats(used, total);
 
   auto now = std::chrono::system_clock::now().time_since_epoch().count();
-  std::vector<Metric> metrics;
   if (needs_total) {
     metrics.push_back(
         {MetricType::METRIC_TYPE_RAM_TOTAL, std::nullopt, (double)total, now});
@@ -41,7 +40,6 @@ std::vector<Metric> RamCollector::Collect() {
     metrics.push_back(
         {MetricType::METRIC_TYPE_RAM_USED, std::nullopt, (double)used, now});
   }
-  return metrics;
 }
 
 std::vector<MetricType> RamCollector::Satisfiable() {

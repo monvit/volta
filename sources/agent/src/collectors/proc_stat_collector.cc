@@ -14,13 +14,13 @@ bool ProcStatCollector::Start(const std::vector<MetricType>& metrics) {
   return std::filesystem::exists("/proc/stat");
 }
 
-std::vector<Metric> ProcStatCollector::Collect() {
-  if (requested_metrics_.empty()) return {};
+void ProcStatCollector::Collect(std::vector<Metric>& metrics) {
+  if (requested_metrics_.empty()) return;
 
   if (std::find(requested_metrics_.begin(), requested_metrics_.end(),
                 MetricType::METRIC_TYPE_CPU_UTILIZATION) ==
       requested_metrics_.end()) {
-    return {};
+    return;
   }
 
   uint64_t current_total = 0;
@@ -45,7 +45,7 @@ std::vector<Metric> ProcStatCollector::Collect() {
   m.value = usage_percent;
   m.timestamp = std::chrono::system_clock::now().time_since_epoch().count();
 
-  return {m};
+  metrics.push_back(m);
 }
 
 std::vector<MetricType> ProcStatCollector::Satisfiable() {

@@ -17,7 +17,8 @@ class Collector {
  public:
   virtual ~Collector() = default;
 
-  virtual std::vector<Metric> Collect() = 0;
+  // Append collected metrics to the caller-owned, reusable output vector.
+  virtual void Collect(std::vector<Metric>& metrics) = 0;
 
   virtual std::vector<MetricType> Satisfiable() = 0;
 
