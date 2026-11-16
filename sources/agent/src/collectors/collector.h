@@ -50,8 +50,6 @@ class CollectorRegistry {
   std::vector<Collector*> Resolve(const std::vector<MetricType>& desired) {
     std::vector<Collector*> result;
     for (auto& collector : entries_) {
-      if (!collector->IsSupported()) continue;
-
       std::vector<MetricType> active;
       for (const auto& type : collector->Satisfiable()) {
         if (std::find(desired.begin(), desired.end(), type) != desired.end()) {
@@ -59,7 +57,7 @@ class CollectorRegistry {
         }
       }
 
-      if (!active.empty()) {
+      if (!active.empty() && collector->IsSupported()) {
         collector->SetRequestedMetrics(active);
         result.push_back(collector.get());
       }
