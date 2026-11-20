@@ -1,7 +1,7 @@
 [Unit]
 Description=Volta system monitoring agent
-After=network-online.target
-Wants=network-online.target
+After=network-online.target modprobe@nvidia.service
+Wants=network-online.target modprobe@nvidia.service
 
 [Service]
 Type=exec
