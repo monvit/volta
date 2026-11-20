@@ -119,8 +119,9 @@ add_executable(volta src/main.cc)
 target_link_libraries(volta PRIVATE volta_lib)
 
 install(TARGETS volta RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
-install(CODE "file(CREATE_LINK volta
-    \"\$ENV{DESTDIR}${CMAKE_INSTALL_FULL_BINDIR}/voltad\" SYMBOLIC)")
+file(CREATE_LINK volta "${CMAKE_CURRENT_BINARY_DIR}/voltad" SYMBOLIC)
+install(PROGRAMS "${CMAKE_CURRENT_BINARY_DIR}/voltad"
+    DESTINATION ${CMAKE_INSTALL_BINDIR})
 install(FILES ${CMAKE_SOURCE_DIR}/agent.example.conf
     DESTINATION ${CMAKE_INSTALL_DATADIR}/volta
 )
@@ -155,15 +156,6 @@ else()
         COMMENT "Copying agent.conf to build directory"
     )
 endif()
-
-add_custom_command(
-    TARGET volta POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E rm -f $<TARGET_FILE_DIR:volta>/voltad
-    COMMAND ${CMAKE_COMMAND} -E create_hardlink
-        $<TARGET_FILE:volta>
-        $<TARGET_FILE_DIR:volta>/voltad
-    COMMENT "Creating hardlink voltad..."
-)
 
 # --- Unit tests ---
 include(CTest)
