@@ -1,4 +1,5 @@
 #include <filesystem>
+#include <fstream>
 #include <iostream>
 #include <string>
 #include <string_view>
@@ -67,6 +68,55 @@ int RunExportStop(int, const char**) {
   return SendControlCommand(control::DumpEnd{});
 }
 
+int RunConfigInit(int argc, const char* argv[]) {
+  if (argc > 4) {
+    std::cerr << "error: usage: volta config init [PATH]\n";
+    return 1;
+  }
+  const std::filesystem::path path =
+      argc == 4 ? std::filesystem::path(argv[3])
+                : std::filesystem::path(config::kSystemConfigPath);
+  std::error_code ec;
+  if (std::filesystem::exists(path, ec)) {
+    std::cerr << "error: config already exists: " << path << "\n";
+    return 1;
+  }
+  if (ec) {
+    std::cerr << "error: cannot inspect " << path << ": " << ec.message()
+              << "\n";
+    return 1;
+  }
+  if (!path.parent_path().empty()) {
+    std::filesystem::create_directories(path.parent_path(), ec);
+    if (ec) {
+      std::cerr << "error: cannot create " << path.parent_path() << ": "
+                << ec.message() << "\n";
+      return 1;
+    }
+  }
+  std::ofstream out(path, std::ios::out | std::ios::trunc);
+  if (!out) {
+    std::cerr << "error: cannot create config: " << path << "\n";
+    return 1;
+  }
+  out << config::ConfigLoader::SerializeConfig(
+      config::ConfigLoader::LoadDefaultConfig());
+  if (!out) {
+    std::cerr << "error: failed writing config: " << path << "\n";
+    return 1;
+  }
+  std::cout << "Created config: " << path << "\n";
+  return 0;
+}
+
+int RunConfig(int argc, const char* argv[]) {
+  if (argc < 3 || std::string_view(argv[2]) != "init") {
+    std::cerr << "error: expected 'volta config init [PATH]'\n";
+    return 1;
+  }
+  return RunConfigInit(argc, argv);
+}
+
 int RunExport(int argc, const char* argv[]) {
   if (argc < 3) {
     std::cerr << "error: missing export command (expected start or stop)\n";
@@ -87,17 +137,19 @@ int RunExport(int argc, const char* argv[]) {
 
 int cli_mode(int argc, const char* argv[]) {
   if (argc < 2) {
-    std::cerr << "error: missing command (expected export)\n";
+    std::cerr << "error: missing command (expected config or export)\n";
     return 1;
   }
   static constexpr CliCommand kCommands[] = {
+      {"config", RunConfig},
       {"export", RunExport},
   };
   std::string_view name(argv[1]);
   for (const auto& command : kCommands) {
     if (name == command.name) return command.run(argc, argv);
   }
-  std::cerr << "error: unknown command '" << name << "' (expected export)\n";
+  std::cerr << "error: unknown command '" << name
+            << "' (expected config or export)\n";
   return 1;
 }
 

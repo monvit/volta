@@ -2,6 +2,11 @@ cmake_minimum_required(VERSION 3.16)
 
 project(volta LANGUAGES CXX)
 
+include(GNUInstallDirs)
+
+set(VOLTA_CONFIG_PATH "/etc/volta/agent.conf" CACHE FILEPATH
+    "Default system agent configuration path")
+
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
@@ -104,11 +109,32 @@ target_link_libraries(volta_lib PUBLIC
     ${CMAKE_DL_LIBS}
 )
 
-target_compile_definitions(volta_lib PUBLIC NVML_NO_UNVERSIONED_FUNC_DEFS)
+target_compile_definitions(volta_lib PUBLIC
+    NVML_NO_UNVERSIONED_FUNC_DEFS
+    VOLTA_SYSTEM_CONFIG_PATH="${VOLTA_CONFIG_PATH}"
+)
 
 # --- Agent executable ---
 add_executable(volta src/main.cc)
 target_link_libraries(volta PRIVATE volta_lib)
+
+install(TARGETS volta RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+file(CREATE_LINK volta "${CMAKE_CURRENT_BINARY_DIR}/voltad" SYMBOLIC)
+install(PROGRAMS "${CMAKE_CURRENT_BINARY_DIR}/voltad"
+    DESTINATION ${CMAKE_INSTALL_BINDIR})
+install(FILES ${CMAKE_SOURCE_DIR}/agent.example.conf
+    DESTINATION ${CMAKE_INSTALL_DATADIR}/volta
+)
+
+configure_file(systemd/volta-agent.service.in
+               ${CMAKE_CURRENT_BINARY_DIR}/volta-agent.service @ONLY)
+install(FILES ${CMAKE_CURRENT_BINARY_DIR}/volta-agent.service
+    DESTINATION lib/systemd/system
+)
+install(FILES systemd/volta.sysusers.conf
+    DESTINATION lib/sysusers.d
+    RENAME volta.conf
+)
 
 # --- Config file ---
 if(NOT EXISTS ${CMAKE_SOURCE_DIR}/agent.conf)
@@ -130,15 +156,6 @@ else()
         COMMENT "Copying agent.conf to build directory"
     )
 endif()
-
-add_custom_command(
-    TARGET volta POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E rm -f $<TARGET_FILE_DIR:volta>/voltad
-    COMMAND ${CMAKE_COMMAND} -E create_hardlink
-        $<TARGET_FILE:volta>
-        $<TARGET_FILE_DIR:volta>/voltad
-    COMMENT "Creating hardlink voltad..."
-)
 
 # --- Unit tests ---
 include(CTest)

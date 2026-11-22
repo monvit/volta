@@ -11,8 +11,10 @@
 #include <cstring>
 #include <filesystem>
 #include <fstream>
+#include <sstream>
 #include <string>
 
+#include "collectors/collector.h"
 #include "config_loader.h"
 #include "logger/spdlog_logger.h"
 #include "utils/utils.h"
@@ -44,46 +46,70 @@ Config ConfigLoader::LoadConfig(
 Config ConfigLoader::LoadDefaultConfig() {
   Config config;
 
-  // request all metrics by default for now
-  config.requestedMetrics = {
-      MetricType::METRIC_TYPE_UNSPECIFIED,
-      MetricType::METRIC_TYPE_CPU_POWER_PACKAGE,
-      MetricType::METRIC_TYPE_CPU_POWER_CORES,
-      MetricType::METRIC_TYPE_CPU_CLOCK_SPEED,
-      MetricType::METRIC_TYPE_CPU_UTILIZATION,
-      MetricType::METRIC_TYPE_CPU_TEMPERATURE,
-      MetricType::METRIC_TYPE_CPU_IOWAIT,
-      MetricType::METRIC_TYPE_CPU_CACHE_HIT_RATIO,
-      MetricType::METRIC_TYPE_CPU_ACTIVE_PROCESSES,
-      MetricType::METRIC_TYPE_GPU_POWER,
-      MetricType::METRIC_TYPE_GPU_CLOCK_SPEED,
-      MetricType::METRIC_TYPE_GPU_UTILIZATION,
-      MetricType::METRIC_TYPE_GPU_TEMPERATURE,
-      MetricType::METRIC_TYPE_GPU_VRAM_USED,
-      MetricType::METRIC_TYPE_GPU_PCIE_BANDWIDTH,
-      MetricType::METRIC_TYPE_GPU_COMPUTE_UNIT_UTILIZATION,
-      MetricType::METRIC_TYPE_GPU_SHARED_MEMORY_UTILIZATION,
-      MetricType::METRIC_TYPE_GPU_REGISTER_UTILIZATION,
-      MetricType::METRIC_TYPE_RAM_POWER,
-      MetricType::METRIC_TYPE_RAM_TOTAL,
-      MetricType::METRIC_TYPE_RAM_AVAILABLE,
-      MetricType::METRIC_TYPE_RAM_USED,
-      MetricType::METRIC_TYPE_RAM_CACHED,
-      MetricType::METRIC_TYPE_SWAP_USED,
-      MetricType::METRIC_TYPE_SWAP_ACTIVITY,
-      MetricType::METRIC_TYPE_DISK_READ_THROUGHPUT,
-      MetricType::METRIC_TYPE_DISK_WRITE_THROUGHPUT,
-      MetricType::METRIC_TYPE_DISK_READ_IOPS,
-      MetricType::METRIC_TYPE_DISK_WRITE_IOPS,
-      MetricType::METRIC_TYPE_DISK_BUSY_TIME,
-      MetricType::METRIC_TYPE_DISK_CAPACITY_USED,
-      MetricType::METRIC_TYPE_NET_BYTES_RECEIVED,
-      MetricType::METRIC_TYPE_NET_BYTES_SENT,
-      MetricType::METRIC_TYPE_NET_PACKETS_RECEIVED,
-      MetricType::METRIC_TYPE_NET_PACKETS_SENT,
-  };
+  // Derive defaults from the metrics implemented by registered collectors so
+  // newly added or unsupported metric types cannot drift into this list.
+  config.requestedMetrics =
+      collectors::CollectorRegistry::Instance().SatisfiableMetrics();
 
   return config;
+}
+
+std::string ConfigLoader::SerializeConfig(const Config& config) {
+  toml::table table;
+
+  bool default_affinity = true;
+  for (int cpu = 0; cpu < CPU_SETSIZE; ++cpu) {
+    if (CPU_ISSET(cpu, &config.core_affinity) !=
+        CPU_ISSET(cpu, &Config::kDefaultAffinity)) {
+      default_affinity = false;
+      break;
+    }
+  }
+  if (default_affinity) {
+    table.insert("core_affinity", "all");
+  } else {
+    toml::array affinity;
+    for (int cpu = 0; cpu < CPU_SETSIZE; ++cpu) {
+      if (CPU_ISSET(cpu, &config.core_affinity)) affinity.push_back(cpu);
+    }
+    table.insert("core_affinity", std::move(affinity));
+  }
+
+  table.insert("interval",
+               static_cast<int64_t>(config.collection_interval.count()));
+  table.insert("server_address", config.server_address);
+  table.insert("server_port", static_cast<int64_t>(config.server_port));
+
+  toml::array metrics;
+  for (const auto metric : config.requestedMetrics) {
+    metrics.push_back(MetricType_Name(metric));
+  }
+  table.insert("metrics", std::move(metrics));
+  table.insert(
+      "time_window",
+      static_cast<double>(config.buffered_time_window.count()) / 1000.0);
+
+  switch (config.log_level) {
+    case LogLevel::NOISY_LEVEL:
+      table.insert("log_level", "trace");
+      break;
+    case LogLevel::DEBUG_LEVEL:
+      table.insert("log_level", "debug");
+      break;
+    case LogLevel::INFO_LEVEL:
+      table.insert("log_level", "info");
+      break;
+    case LogLevel::WARNING_LEVEL:
+      table.insert("log_level", "warning");
+      break;
+    case LogLevel::ERROR_LEVEL:
+      table.insert("log_level", "error");
+      break;
+  }
+
+  std::ostringstream serialized;
+  serialized << table;
+  return serialized.str();
 }
 
 inline unsigned int MaxOnlineCpus() {
