@@ -72,6 +72,7 @@ const NvmlApi* TryLoadNvml() {
     return &g_nvml;
   }
 
+  g_load_error.clear();
   void* handle = nullptr;
   for (const auto candidate : kLibraryCandidates) {
     dlerror();

@@ -14,8 +14,8 @@ NvmlCollector::~NvmlCollector() {
     nvml_->Shutdown();
     initialized_ = false;
     nvml_ = nullptr;
+    platform::UnloadNvml();
   }
-  platform::UnloadNvml();
 }
 
 bool NvmlCollector::Start(const std::vector<MetricType>& metrics) {

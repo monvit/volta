@@ -6,7 +6,6 @@
 #endif
 #include <nvml.h>
 
-#include <string>
 #include <string_view>
 
 namespace volta {
@@ -14,7 +13,7 @@ namespace agent {
 namespace platform {
 
 struct NvmlApi {
-  std::string library_path;
+  std::string_view library_path;
 
   nvmlReturn_t (*Init)(void) = nullptr;
   nvmlReturn_t (*Shutdown)(void) = nullptr;
