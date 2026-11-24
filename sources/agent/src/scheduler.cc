@@ -30,7 +30,6 @@ Scheduler::Scheduler(const config::Config& config,
       control_socket_(
           control::ResolveControlSocketPath(control::ControlPathSide::kDaemon)
               .string(),
-          control::ControlSocket::Role::kServer,
           logger_->WithName("ControlSocket")) {}
 
 void Scheduler::Run() {
@@ -38,23 +37,25 @@ void Scheduler::Run() {
                "Starting collection loop (Interval: {} ms)",
                config_.collection_interval.count());
 
-  control_socket_.Listen([this](std::string_view message) {
-    auto command = control::Decode(message);
-    if (!command) {
-      logger_->Log(LogLevel::WARNING_LEVEL,
-                   "control socket: dropped unrecognized command");
-      return;
-    }
-    if (const auto* start = std::get_if<control::DumpStart>(&*command)) {
-      exporter_.StartDump(start->path);
-      const auto dump_dir = start->path ? start->path->string()
-                                        : std::string("configured directory");
-      logger_->Log(LogLevel::INFO_LEVEL, "Dump started to {}", dump_dir);
-    } else {
-      exporter_.EndDump();
-      logger_->Log(LogLevel::INFO_LEVEL, "Dump ended");
-    }
-  });
+  control_socket_.Listen(
+      [this](std::string_view message) -> control::ControlReply {
+        auto command = control::Decode(message);
+        if (!command) {
+          logger_->Log(LogLevel::WARNING_LEVEL,
+                       "control socket: unrecognized command");
+          return {false, "Unrecognized command"};
+        }
+        if (const auto* start = std::get_if<control::DumpStart>(&*command)) {
+          auto reply = FormatDumpReply(exporter_.StartDump(start->path));
+          logger_->Log(
+              reply.ok ? LogLevel::INFO_LEVEL : LogLevel::WARNING_LEVEL, "{}",
+              reply.message);
+          return reply;
+        }
+        auto reply = FormatDumpReply(exporter_.EndDump());
+        logger_->Log(LogLevel::INFO_LEVEL, "{}", reply.message);
+        return reply;
+      });
 
   std::vector<Metric> metrics;
   metrics.reserve(config_.requestedMetrics.size());
@@ -74,7 +75,9 @@ void Scheduler::Run() {
   // Stop accepting control commands before closing the dump so a late
   // dump_start cannot open a file after shutdown cleanup.
   control_socket_.StopListening();
-  exporter_.EndDump();
+  if (auto stopped = exporter_.EndDump()) {
+    logger_->Log(LogLevel::INFO_LEVEL, "Dump stopped: {}", stopped->string());
+  }
 }
 
 std::string Scheduler::DescribeKey(const BufferKey& key) {
