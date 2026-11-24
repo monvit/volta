@@ -168,10 +168,12 @@ void ControlSocket::BindServer() {
 
   if (::chmod(path_.c_str(), opts_.mode) != 0) {
     int saved = errno;
-    CloseLockFd();
+    // Keep the single-instance lock held while removing the partial socket
+    // so another daemon cannot bind this path in between.
     CloseFd();
     ::unlink(path_.c_str());
     owns_path_ = false;
+    CloseLockFd();
     throw std::runtime_error(std::string("chmod(") + path_ +
                              "): " + std::strerror(saved));
   }
