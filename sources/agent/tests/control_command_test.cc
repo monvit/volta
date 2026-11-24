@@ -1,6 +1,7 @@
 #include "control/control_command.h"
 
 #include <filesystem>
+#include <string>
 #include <variant>
 
 #include "gtest/gtest.h"
@@ -38,6 +39,64 @@ TEST(ControlCommandTest, WireQuirks) {
 
   EXPECT_FALSE(Decode("dump_startfoo").has_value());
   EXPECT_FALSE(Decode("dump_end;extra").has_value());
+}
+
+TEST(ControlReplyTest, OkAndErrRoundTrip) {
+  EXPECT_EQ(Encode(ControlReply{true, "Dump started: /var/lib/volta/a.csv"}),
+            "ok\nDump started: /var/lib/volta/a.csv");
+  auto ok = DecodeReply("ok\nDump started: /var/lib/volta/a.csv");
+  ASSERT_TRUE(ok.has_value());
+  EXPECT_TRUE(ok->ok);
+  EXPECT_EQ(ok->message, "Dump started: /var/lib/volta/a.csv");
+
+  EXPECT_EQ(Encode(ControlReply{false, "Dump already running: /tmp/a.csv"}),
+            "err\nDump already running: /tmp/a.csv");
+  auto err = DecodeReply("err\nDump already running: /tmp/a.csv");
+  ASSERT_TRUE(err.has_value());
+  EXPECT_FALSE(err->ok);
+  EXPECT_EQ(err->message, "Dump already running: /tmp/a.csv");
+}
+
+TEST(ControlReplyTest, EmptyMessage) {
+  EXPECT_EQ(Encode(ControlReply{true, ""}), "ok\n");
+  auto ok = DecodeReply("ok\n");
+  ASSERT_TRUE(ok.has_value());
+  EXPECT_TRUE(ok->ok);
+  EXPECT_TRUE(ok->message.empty());
+
+  EXPECT_EQ(Encode(ControlReply{false, ""}), "err\n");
+  auto err = DecodeReply("err\n");
+  ASSERT_TRUE(err.has_value());
+  EXPECT_FALSE(err->ok);
+  EXPECT_TRUE(err->message.empty());
+}
+
+TEST(ControlReplyTest, EmbeddedNewlines) {
+  const std::string message = "first\nsecond\nthird";
+  EXPECT_EQ(Encode(ControlReply{true, message}), "ok\n" + message);
+  auto ok = DecodeReply("ok\nfirst\nsecond\nthird");
+  ASSERT_TRUE(ok.has_value());
+  EXPECT_TRUE(ok->ok);
+  EXPECT_EQ(ok->message, message);
+
+  EXPECT_EQ(Encode(ControlReply{false, message}), "err\n" + message);
+  auto err = DecodeReply("err\nfirst\nsecond\nthird");
+  ASSERT_TRUE(err.has_value());
+  EXPECT_FALSE(err->ok);
+  EXPECT_EQ(err->message, message);
+}
+
+TEST(ControlReplyTest, Malformed) {
+  EXPECT_FALSE(DecodeReply("").has_value());
+  EXPECT_FALSE(DecodeReply("ok").has_value());
+  EXPECT_FALSE(DecodeReply("err").has_value());
+  EXPECT_FALSE(DecodeReply("okmessage").has_value());
+  EXPECT_FALSE(DecodeReply("\nmessage").has_value());
+  EXPECT_FALSE(DecodeReply("okay\nmessage").has_value());
+  EXPECT_FALSE(DecodeReply("error\nmessage").has_value());
+  EXPECT_FALSE(DecodeReply("OK\nmessage").has_value());
+  EXPECT_FALSE(DecodeReply("ERR\nmessage").has_value());
+  EXPECT_FALSE(DecodeReply("nope\nmessage").has_value());
 }
 
 }  // namespace
