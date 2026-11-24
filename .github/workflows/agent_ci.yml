@@ -32,13 +32,17 @@ jobs:
     - name: Prepare vcpkg binary cache dir
       run: mkdir -p "${{ github.workspace }}/.vcpkg-binary-cache"
 
+    - name: Compiler version
+      id: cxx
+      run: echo "version=$(c++ -dumpfullversion)" >> "$GITHUB_OUTPUT"
+
     - name: Cache vcpkg packages
       uses: actions/cache@v4
       with:
         path: ${{ github.workspace }}/.vcpkg-binary-cache
-        key: vcpkg-${{ runner.os }}-${{ hashFiles('sources/agent/vcpkg.json') }}
+        key: vcpkg-${{ runner.os }}-g++-${{ steps.cxx.outputs.version }}-${{ hashFiles('sources/agent/vcpkg.json') }}
         restore-keys: |
-          vcpkg-${{ runner.os }}-
+          vcpkg-${{ runner.os }}-g++-${{ steps.cxx.outputs.version }}-
 
     - name: Setup vcpkg
       uses: lukka/run-vcpkg@v11
