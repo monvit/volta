@@ -3,13 +3,14 @@
 
 #include <sys/types.h>
 
-#include <atomic>
 #include <cstddef>
 #include <functional>
 #include <string>
 #include <string_view>
 #include <thread>
+#include <vector>
 
+#include "control/unique_fd.h"
 #include "logger/logger.h"
 
 namespace volta {
@@ -51,26 +52,26 @@ class ControlSocket {
   void StopListening();
 
  private:
-  void CloseFd();
-  void CloseLockFd();
   void BindServer();
   bool EnsureClientConnected(int* err_out);
   void RecvLoop();
   enum class DatagramRead { kRetry, kStop, kMessage };
-  bool WaitForDatagram(int fd, const std::atomic<bool>& listening);
-  DatagramRead ReadDatagram(int fd, std::vector<char>& buf,
-                            bool still_listening, std::string* message);
+  // Blocks until fd_ is readable or StopListening() signals wake_fd_.
+  bool WaitForDatagram();
+  DatagramRead ReadDatagram(std::vector<char>& buf, std::string* message);
 
   std::string path_;
   Role role_;
   Options opts_;
-  int fd_ = -1;
-  int lock_fd_ = -1;
+  // Closed before path_ is unlinked. lock_fd_ stays open across that unlink
+  // and is released only when members are destroyed.
+  UniqueFd lock_fd_;
+  UniqueFd fd_;
+  UniqueFd wake_fd_;
   bool connected_ = false;
   bool owns_path_ = false;
   std::unique_ptr<logging::Logger> logger_;
   MessageHandler handler_;
-  std::atomic<bool> listening_{false};
   std::thread recv_thread_;
 };
 

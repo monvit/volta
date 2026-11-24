@@ -2,6 +2,7 @@
 
 #include <fcntl.h>
 #include <poll.h>
+#include <sys/eventfd.h>
 #include <sys/file.h>
 #include <sys/socket.h>
 #include <sys/stat.h>
@@ -75,12 +76,12 @@ ControlSocket::ControlSocket(std::string path, Role role,
   if (opts_.max_message_size == 0) {
     throw std::invalid_argument("max_message_size must be > 0");
   }
-  // Reject overlong paths before socket() so a throw does not leak an fd.
+  // Reject overlong paths before creating the socket.
   socklen_t ignored = 0;
   MakeAddr(path_, &ignored);
 
-  fd_ = ::socket(AF_UNIX, SOCK_DGRAM | SOCK_CLOEXEC, 0);
-  if (fd_ < 0) {
+  fd_ = UniqueFd(::socket(AF_UNIX, SOCK_DGRAM | SOCK_CLOEXEC, 0));
+  if (!fd_) {
     throw std::runtime_error(std::string("socket(AF_UNIX, SOCK_DGRAM): ") +
                              std::strerror(errno));
   }
@@ -88,8 +89,10 @@ ControlSocket::ControlSocket(std::string path, Role role,
 }
 
 ControlSocket::~ControlSocket() {
+  // Join the receive thread before closing the socket. Unlink while the
+  // lock fd is still held; lock_fd_ closes later, during member destruction.
   StopListening();
-  CloseFd();
+  fd_.reset();
   if (owns_path_) {
     // ENOENT is success: systemd may already have removed the runtime dir.
     if (::unlink(path_.c_str()) != 0 && errno != ENOENT) {
@@ -97,38 +100,21 @@ ControlSocket::~ControlSocket() {
                    "control socket unlink({}): {}", path_,
                    std::strerror(errno));
     }
-  }
-  CloseLockFd();
-}
-
-void ControlSocket::CloseFd() {
-  if (fd_ >= 0) {
-    ::close(fd_);
-    fd_ = -1;
-  }
-  connected_ = false;
-}
-
-void ControlSocket::CloseLockFd() {
-  if (lock_fd_ >= 0) {
-    ::close(lock_fd_);
-    lock_fd_ = -1;
+    owns_path_ = false;
   }
 }
 
 void ControlSocket::BindServer() {
   const std::string lock_path = path_ + ".lock";
-  lock_fd_ = ::open(lock_path.c_str(), O_CREAT | O_RDWR | O_CLOEXEC, 0660);
-  if (lock_fd_ < 0) {
+  lock_fd_ =
+      UniqueFd(::open(lock_path.c_str(), O_CREAT | O_RDWR | O_CLOEXEC, 0660));
+  if (!lock_fd_) {
     int saved = errno;
-    CloseFd();
     throw std::runtime_error(std::string("open(") + lock_path +
                              "): " + std::strerror(saved));
   }
-  if (::flock(lock_fd_, LOCK_EX | LOCK_NB) != 0) {
+  if (::flock(lock_fd_.get(), LOCK_EX | LOCK_NB) != 0) {
     int saved = errno;
-    CloseLockFd();
-    CloseFd();
     if (saved == EWOULDBLOCK || saved == EAGAIN) {
       throw std::runtime_error("control socket already running");
     }
@@ -139,8 +125,6 @@ void ControlSocket::BindServer() {
   // Stale inode from a crashed non-systemd run. Harmless if absent.
   if (::unlink(path_.c_str()) != 0 && errno != ENOENT) {
     int saved = errno;
-    CloseLockFd();
-    CloseFd();
     throw std::runtime_error(std::string("unlink(") + path_ +
                              "): " + std::strerror(saved));
   }
@@ -155,12 +139,10 @@ void ControlSocket::BindServer() {
   int bind_errno = 0;
   {
     ScopedUmask umask_guard(bind_umask);
-    bind_rc = ::bind(fd_, reinterpret_cast<sockaddr*>(&addr), len);
+    bind_rc = ::bind(fd_.get(), reinterpret_cast<sockaddr*>(&addr), len);
     bind_errno = errno;
   }
   if (bind_rc != 0) {
-    CloseLockFd();
-    CloseFd();
     throw std::runtime_error(std::string("bind(") + path_ +
                              "): " + std::strerror(bind_errno));
   }
@@ -169,24 +151,28 @@ void ControlSocket::BindServer() {
   if (::chmod(path_.c_str(), opts_.mode) != 0) {
     int saved = errno;
     // Keep the single-instance lock held while removing the partial socket
-    // so another daemon cannot bind this path in between.
-    CloseFd();
-    ::unlink(path_.c_str());
+    // so another daemon cannot bind this path in between. lock_fd_ stays
+    // open until member destruction after this throw.
+    fd_.reset();
+    if (::unlink(path_.c_str()) != 0 && errno != ENOENT) {
+      logger_->Log(logging::LogLevel::ERROR_LEVEL,
+                   "control socket unlink({}): {}", path_,
+                   std::strerror(errno));
+    }
     owns_path_ = false;
-    CloseLockFd();
     throw std::runtime_error(std::string("chmod(") + path_ +
                              "): " + std::strerror(saved));
   }
 
-  int flags = ::fcntl(fd_, F_GETFL, 0);
-  if (flags >= 0) ::fcntl(fd_, F_SETFL, flags | O_NONBLOCK);
+  int flags = ::fcntl(fd_.get(), F_GETFL, 0);
+  if (flags >= 0) ::fcntl(fd_.get(), F_SETFL, flags | O_NONBLOCK);
 }
 
 bool ControlSocket::EnsureClientConnected(int* err_out) {
   if (connected_) return true;
   socklen_t len = 0;
   sockaddr_un addr = MakeAddr(path_, &len);
-  if (::connect(fd_, reinterpret_cast<sockaddr*>(&addr), len) != 0) {
+  if (::connect(fd_.get(), reinterpret_cast<sockaddr*>(&addr), len) != 0) {
     if (err_out) *err_out = errno;
     return false;
   }
@@ -204,11 +190,11 @@ bool ControlSocket::Send(std::string_view message, int* err_out) {
   }
   if (!EnsureClientConnected(err_out)) return false;
 
-  ssize_t n = ::send(fd_, message.data(), message.size(), MSG_NOSIGNAL);
+  ssize_t n = ::send(fd_.get(), message.data(), message.size(), MSG_NOSIGNAL);
   if (n < 0 && (errno == ECONNREFUSED || errno == ENOTCONN || errno == EPIPE)) {
     connected_ = false;
     if (!EnsureClientConnected(err_out)) return false;
-    n = ::send(fd_, message.data(), message.size(), MSG_NOSIGNAL);
+    n = ::send(fd_.get(), message.data(), message.size(), MSG_NOSIGNAL);
   }
   if (n < 0) {
     if (err_out) *err_out = errno;
@@ -225,51 +211,53 @@ void ControlSocket::Listen(MessageHandler handler) {
   if (role_ != Role::kServer) {
     throw std::logic_error("Listen() called on a client control socket");
   }
-  if (listening_.load()) return;
+  if (recv_thread_.joinable()) return;
   handler_ = std::move(handler);
-  listening_.store(true);
+  wake_fd_ = UniqueFd(::eventfd(0, EFD_CLOEXEC));
+  if (!wake_fd_) {
+    int saved = errno;
+    throw std::runtime_error(std::string("eventfd: ") + std::strerror(saved));
+  }
   recv_thread_ = std::thread([this] { RecvLoop(); });
 }
 
 void ControlSocket::StopListening() {
-  listening_.store(false);
-  if (recv_thread_.joinable()) recv_thread_.join();
+  if (!recv_thread_.joinable()) return;
+  ::eventfd_write(wake_fd_.get(), 1);
+  recv_thread_.join();
+  wake_fd_.reset();
 }
 
-bool ControlSocket::WaitForDatagram(int fd,
-                                    const std::atomic<bool>& listening) {
-  while (listening.load()) {
-    pollfd pfd{};
-    pfd.fd = fd;
-    pfd.events = POLLIN;
-    int ready = ::poll(&pfd, 1, 200);
+bool ControlSocket::WaitForDatagram() {
+  pollfd pfds[2]{};
+  pfds[0].fd = fd_.get();
+  pfds[0].events = POLLIN;
+  pfds[1].fd = wake_fd_.get();
+  pfds[1].events = POLLIN;
+
+  while (true) {
+    int ready = ::poll(pfds, 2, -1);
     if (ready < 0) {
       if (errno == EINTR) continue;
-      if (listening.load()) {
-        logger_->Log(logging::LogLevel::ERROR_LEVEL, "control socket poll: {}",
-                     std::strerror(errno));
-      }
+      logger_->Log(logging::LogLevel::ERROR_LEVEL, "control socket poll: {}",
+                   std::strerror(errno));
       return false;
     }
-    if (ready == 0) continue;
-    return listening.load();
+    // Shutdown wins over a datagram that arrived in the same wake.
+    if (pfds[1].revents != 0) return false;
+    if (pfds[0].revents != 0) return true;
   }
-  return false;
 }
 
-ControlSocket::DatagramRead ControlSocket::ReadDatagram(int fd,
-                                                        std::vector<char>& buf,
-                                                        bool still_listening,
+ControlSocket::DatagramRead ControlSocket::ReadDatagram(std::vector<char>& buf,
                                                         std::string* message) {
-  ssize_t n = ::recv(fd, buf.data(), buf.size(), MSG_TRUNC);
+  ssize_t n = ::recv(fd_.get(), buf.data(), buf.size(), MSG_TRUNC);
   if (n < 0) {
     if (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR) {
       return DatagramRead::kRetry;
     }
-    if (still_listening) {
-      logger_->Log(logging::LogLevel::ERROR_LEVEL, "control socket recv: {}",
-                   std::strerror(errno));
-    }
+    logger_->Log(logging::LogLevel::ERROR_LEVEL, "control socket recv: {}",
+                 std::strerror(errno));
     return DatagramRead::kStop;
   }
   if (static_cast<std::size_t>(n) > buf.size()) {
@@ -283,9 +271,9 @@ ControlSocket::DatagramRead ControlSocket::ReadDatagram(int fd,
 
 void ControlSocket::RecvLoop() {
   std::vector<char> buf(opts_.max_message_size);
-  while (WaitForDatagram(fd_, listening_)) {
+  while (WaitForDatagram()) {
     std::string message;
-    switch (ReadDatagram(fd_, buf, listening_.load(), &message)) {
+    switch (ReadDatagram(buf, &message)) {
       case DatagramRead::kRetry:
         continue;
       case DatagramRead::kStop:
