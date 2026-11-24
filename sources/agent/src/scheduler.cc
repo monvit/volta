@@ -71,8 +71,10 @@ void Scheduler::Run() {
 
     std::this_thread::sleep_for(config_.collection_interval);
   }
-  exporter_.EndDump();
+  // Stop accepting control commands before closing the dump so a late
+  // dump_start cannot open a file after shutdown cleanup.
   control_socket_.StopListening();
+  exporter_.EndDump();
 }
 
 std::string Scheduler::DescribeKey(const BufferKey& key) {
