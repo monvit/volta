@@ -1,5 +1,6 @@
 import { fromJson } from "@bufbuild/protobuf";
 import { ListAgentsResponseSchema, type Agent } from "@/proto/gen/types/agent_pb";
+import type { AnalysisRequestPayload, AnalysisResult } from "@/lib/analysis";
 
 export type { Agent };
 
@@ -37,6 +38,29 @@ export async function fetchAgents(baseUrl: string, signal?: AbortSignal) {
     ignoreUnknownFields: true,
   });
   return listAgentsResponse.agents;
+}
+
+/** Analyse stored metrics for an agent through the server's Analysis sidecar. */
+export async function runAnalysis(
+  baseUrl: string,
+  agentId: string,
+  request: AnalysisRequestPayload,
+  signal?: AbortSignal,
+) {
+  const url = apiUrl(baseUrl, `/api/agents/${encodeURIComponent(agentId)}/analyze`);
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Accept: "application/json" },
+    body: JSON.stringify(request),
+    signal,
+  });
+
+  if (!res.ok) {
+    const detail = (await res.text()).trim();
+    throw new Error(detail || `Analysis failed (${res.status})`);
+  }
+
+  return (await res.json()) as AnalysisResult;
 }
 
 /** Ask an agent to begin streaming.

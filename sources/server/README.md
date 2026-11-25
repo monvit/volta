@@ -62,6 +62,10 @@ If no config file is found, the server falls back to built-in defaults.
 | `db.max_conns` | `--db.max_conns` | `8` | Maximum connections in the pool. |
 | `db.max_idle` | `--db.max_idle` | `2` | Minimum idle connections in the pool. |
 | `db.retention_days` | `--db.retention_days` | `30` | Metric retention window in days. |
+| `analysis.enabled` | `--analysis.enabled` | `false` | Enable the analysis endpoint and the sidecar client. |
+| `analysis.url` | `--analysis.url` | `http://localhost:8000` | Base URL of the Analysis sidecar (required when enabled). |
+| `analysis.timeout` | `--analysis.timeout` | `20` | Sidecar request timeout in seconds; values above `25` fall back to the default to stay below the HTTP middleware timeout. |
+| `analysis.max_rows` | `--analysis.max_rows` | `100000` | Maximum number of stored points sent to the sidecar per request. |
 
 `grpc.port` and `rest.port` must differ — the server fails to start otherwise.
 
@@ -83,19 +87,19 @@ level = "info"
 
 ## Database (TimescaleDB)
 
-Metric persistence is optional and disabled by default. When enabled, the server writes incoming agent batches to a TimescaleDB hypertable named `metrics` and serves historical data from `GET /api/agents/{id}/metrics`.
+Metric persistence is optional and disabled by default. When enabled, the server writes incoming agent batches to a TimescaleDB hypertable named `metrics` and serves historical data from `GET /api/agents/{id}/metrics`. With `analysis.enabled = true` it can also compute statistics, rollups, anomalies, correlations and regressions over that history via `POST /api/agents/{id}/analyze`; the computation itself runs in the Python Analysis sidecar. Without a database or with analysis disabled the endpoint returns `503`.
 
 The server never runs migrations on startup. It refuses to start if the schema has pending migrations, so apply them explicitly before starting.
 
 ### Option A — Docker (recommended)
 
-The repository ships a `docker-compose.yml` with three services: `timescaledb`, a one-shot `migrate`, and `server`. From the repository root:
+The repository ships a `docker-compose.yml` with four services: `timescaledb`, a one-shot `migrate`, the `analysis` sidecar, and `server`. From the repository root:
 
 ```bash
 docker compose up -d --build
 ```
 
-Compose starts TimescaleDB, waits for it to become healthy, applies migrations, then starts the server with the database enabled. Ports: `5000` (gRPC) and `8080` (HTTP). Data is kept in the `volta_timescale` volume.
+Compose starts TimescaleDB, waits for it to become healthy, applies migrations, waits for the analysis sidecar to become healthy, then starts the server with the database and analysis enabled. Ports: `5000` (gRPC) and `8080` (HTTP). Data is kept in the `volta_timescale` volume. The sidecar is reachable inside the Compose network only, at `http://analysis:8000`.
 
 ```bash
 # status / logs
@@ -205,8 +209,28 @@ curl -s "http://localhost:8080/api/agents/11111111-1111-1111-1111-111111111111/m
 | Method & Path | Description |
 |---|---|
 | `GET /api/agents` | List currently connected agents. |
+| `GET /api/agents/{id}/metrics` | Query stored metrics for a time range. |
+| `POST /api/agents/{id}/analyze` | Analyse stored metrics via the Analysis sidecar. |
 | `POST /api/agents/{id}/stream` | Instruct an agent to start streaming metrics. |
 | `POST /api/agents/{id}/send` | Instruct an agent to send a one-off metric batch. *(not yet implemented)* |
+
+`POST /api/agents/{id}/analyze` accepts an optional JSON body:
+
+```json
+{
+  "from": "2026-11-17T10:00:00Z",
+  "to": "2026-11-17T11:00:00Z",
+  "metric_types": [103, 100],
+  "bucket_seconds": 60,
+  "sigma": 3.0,
+  "min_points": 8,
+  "pairs": [
+    ["METRIC_TYPE_CPU_UTILIZATION@system", "METRIC_TYPE_CPU_POWER_PACKAGE@system"]
+  ]
+}
+```
+
+The response is the Analysis sidecar's JSON result, passed through unchanged.
 
 ### WebSocket
 

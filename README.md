@@ -15,6 +15,7 @@ For the full architecture, deployment models (local vs. remote) and the metric c
 |---|---|---|---|
 | [`sources/agent`](sources/agent) | Agent | C++20, CMake, vcpkg | Collects CPU/GPU power and standard system metrics; streams them to the server. |
 | [`sources/server`](sources/server) | Server | Go | Central aggregation point; gRPC ingest, REST + WebSocket API for the dashboard. |
+| [`sources/analysis`](sources/analysis) | Analysis | Python | Shared metrics analysis core; local CSV CLI and HTTP sidecar for the server. |
 | [`sources/dashboard`](sources/dashboard) | Dashboard | TypeScript, React, Vite | Web UI for visualising live and historical agent metrics. |
 | [`sources/proto`](sources/proto) | Proto | Protocol Buffers | Shared gRPC contract between Agent and Server. |
 | [`docs`](docs) | Docs | Markdown | Architecture, metrics and other supporting documentation. |
@@ -31,7 +32,7 @@ For the full architecture, deployment models (local vs. remote) and the metric c
 
 - **Git**
 - **Make**
-- Component-specific toolchains — see [`sources/agent/README.md`](sources/agent/README.md), [`sources/server/README.md`](sources/server/README.md) and [`sources/dashboard/README.md`](sources/dashboard/README.md)
+- Component-specific toolchains — see [`sources/agent/README.md`](sources/agent/README.md), [`sources/server/README.md`](sources/server/README.md), [`sources/analysis/README.md`](sources/analysis/README.md) and [`sources/dashboard/README.md`](sources/dashboard/README.md)
 
 ### 2. Clone the Repository
 
@@ -46,6 +47,7 @@ Follow the dedicated setup steps in respective READMEs.
 
 - [Agent](/sources/agent/README.md)
 - [Server](/sources/server/README.md)
+- [Analysis](/sources/analysis/README.md)
 - [Dashboard](/sources/dashboard/README.md)
 
 The server can optionally persist metrics to TimescaleDB. See the [Database section](sources/server/README.md#database-timescaledb) in the server README for local and Docker setups.
@@ -58,7 +60,7 @@ make hooks
 
 ## Continuous Integration
 
-Each component is linted, built and tested independently and only on relevant changes — see [`.github/workflows`](.github/workflows) (`agent_ci.yml`, `server_ci.yml`, `dashboard_ci.yml`).
+Each component is linted, built and tested independently and only on relevant changes — see [`.github/workflows`](.github/workflows) (`agent_ci.yml`, `server_ci.yml`, `analysis_ci.yml`, `dashboard_ci.yml`).
 
 ## License
 

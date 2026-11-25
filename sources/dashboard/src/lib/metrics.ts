@@ -183,3 +183,28 @@ export function formatDeviceId(device?: DeviceID) {
 export function seriesKey(type: MetricType, device?: DeviceID) {
   return `${type}::${formatDeviceId(device) ?? ""}`;
 }
+
+/** Device identifier in the same form as the agent's CSV exporter and the database. */
+export function analysisDeviceId(device?: DeviceID) {
+  const d = device?.device;
+  switch (d?.case) {
+    case "cpu":
+      return `cpu=s${d.value.socketIndex}/${d.value.coreIndex}`;
+    case "gpu": {
+      const g = d.value;
+      return `gpu=${g.pciDomain}:${g.pciBus}:${g.pciDevice}.${g.pciFunction}`;
+    }
+    case "network":
+      return `net_ifindex=${d.value.ifindex}`;
+    case "disk":
+      return `disk=${d.value.major}:${d.value.minor}`;
+    default:
+      return "system";
+  }
+}
+
+/** Series key used by the Analysis API: METRIC_TYPE_NAME@device_id. */
+export function analysisSeriesKey(type: MetricType, device?: DeviceID) {
+  const name = MetricType[type] ? `METRIC_TYPE_${MetricType[type]}` : "METRIC_TYPE_UNSPECIFIED";
+  return `${name}@${analysisDeviceId(device)}`;
+}

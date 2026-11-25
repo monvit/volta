@@ -27,6 +27,12 @@ const (
 	DEFAULT_DB_MAX_IDLE       = 2
 	DEFAULT_DB_RETENTION_DAYS = 30
 
+	ANALYSIS_URL_DEFAULT      = "http://localhost:8000"
+	DEFAULT_ANALYSIS_TIMEOUT  = 20
+	MAX_ANALYSIS_TIMEOUT      = 25
+	DEFAULT_ANALYSIS_MAX_ROWS = 100000
+	MAX_ANALYSIS_MAX_ROWS     = 100000
+
 	SYS_CONF   = "/etc/volta/server.conf"
 	LOCAL_CONF = "server.conf"
 	ENV_CONF   = ".env"
@@ -39,11 +45,12 @@ var DefaultAllowedOrigins = []string{
 }
 
 type Config struct {
-	GRPC GRPCConfig   `koanf:"grpc"`
-	REST RESTConfig   `koanf:"rest"`
-	Buf  BufferConfig `koanf:"buf"`
-	Log  LogConfig    `koanf:"log"`
-	DB   DBConfig     `koanf:"db"`
+	GRPC     GRPCConfig     `koanf:"grpc"`
+	REST     RESTConfig     `koanf:"rest"`
+	Buf      BufferConfig   `koanf:"buf"`
+	Log      LogConfig      `koanf:"log"`
+	DB       DBConfig       `koanf:"db"`
+	Analysis AnalysisConfig `koanf:"analysis"`
 }
 
 type GRPCConfig struct {
@@ -73,6 +80,13 @@ type DBConfig struct {
 	Retention int    `koanf:"retention_days"`
 }
 
+type AnalysisConfig struct {
+	Enabled bool   `koanf:"enabled"`
+	URL     string `koanf:"url"`
+	Timeout int    `koanf:"timeout"`
+	MaxRows int    `koanf:"max_rows"`
+}
+
 func Default() *Config {
 	return &Config{
 		GRPC: GRPCConfig{
@@ -95,6 +109,12 @@ func Default() *Config {
 			MaxConns:  DEFAULT_DB_MAX_CONNS,
 			MaxIdle:   DEFAULT_DB_MAX_IDLE,
 			Retention: DEFAULT_DB_RETENTION_DAYS,
+		},
+		Analysis: AnalysisConfig{
+			Enabled: false,
+			URL:     ANALYSIS_URL_DEFAULT,
+			Timeout: DEFAULT_ANALYSIS_TIMEOUT,
+			MaxRows: DEFAULT_ANALYSIS_MAX_ROWS,
 		},
 	}
 }
@@ -160,6 +180,11 @@ func Load() (*Config, error) {
 	f.Int("db.max_idle", DEFAULT_DB_MAX_IDLE, "")
 	f.Int("db.retention_days", DEFAULT_DB_RETENTION_DAYS, "")
 
+	f.Bool("analysis.enabled", false, "")
+	f.String("analysis.url", ANALYSIS_URL_DEFAULT, "")
+	f.Int("analysis.timeout", DEFAULT_ANALYSIS_TIMEOUT, "")
+	f.Int("analysis.max_rows", DEFAULT_ANALYSIS_MAX_ROWS, "")
+
 	if err := f.Parse(os.Args[1:]); err != nil {
 		errs = append(errs, fmt.Errorf("flags parse: %w", err))
 	}
@@ -192,6 +217,16 @@ func Load() (*Config, error) {
 	}
 	if cfg.DB.Retention < 1 {
 		cfg.DB.Retention = DEFAULT_DB_RETENTION_DAYS
+	}
+
+	if cfg.Analysis.Enabled && cfg.Analysis.URL == "" {
+		errs = append(errs, fmt.Errorf("analysis.enabled requires analysis.url (or ANALYSIS_URL)"))
+	}
+	if cfg.Analysis.Timeout <= 0 || cfg.Analysis.Timeout > MAX_ANALYSIS_TIMEOUT {
+		cfg.Analysis.Timeout = DEFAULT_ANALYSIS_TIMEOUT
+	}
+	if cfg.Analysis.MaxRows < 1 || cfg.Analysis.MaxRows > MAX_ANALYSIS_MAX_ROWS {
+		cfg.Analysis.MaxRows = DEFAULT_ANALYSIS_MAX_ROWS
 	}
 
 	if len(errs) > 0 {

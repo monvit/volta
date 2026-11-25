@@ -11,6 +11,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/monvit/volta/server/internal/analysis"
 	commandrouter "github.com/monvit/volta/server/internal/commandRouter"
 	"github.com/monvit/volta/server/internal/config"
 	dbstore "github.com/monvit/volta/server/internal/db"
@@ -77,7 +78,17 @@ func main() {
 	bus := eventbus.New()
 	router := commandrouter.New(registry)
 	hub := hub.New(bus, cfg.REST.AllowedOrigins)
+	analyzer := analysis.New(
+		cfg.Analysis.Enabled,
+		cfg.Analysis.URL,
+		time.Duration(cfg.Analysis.Timeout)*time.Second,
+		cfg.Analysis.MaxRows,
+	)
 	go hub.Run()
+
+	if analyzer.Enabled() {
+		logger.Info("analysis sidecar configured at %v", cfg.Analysis.URL)
+	}
 
 	// gRPC
 	grpcSrv := server.New(registry, bus, store)
@@ -94,12 +105,12 @@ func main() {
 	}()
 
 	// HTTP
-	httpSrv := httpserver.NewHTTPServer(registry, router, hub, store, cfg.REST.AllowedOrigins)
+	httpSrv := httpserver.NewHTTPServer(registry, router, hub, store, analyzer, cfg.REST.AllowedOrigins)
 	srv := &http.Server{
 		Addr:         net.JoinHostPort(cfg.REST.Addr, strconv.Itoa(int(cfg.REST.Port))),
 		Handler:      httpSrv,
 		ReadTimeout:  10 * time.Second,
-		WriteTimeout: 10 * time.Second,
+		WriteTimeout: 35 * time.Second,
 		IdleTimeout:  60 * time.Second,
 	}
 

@@ -2,6 +2,7 @@ import { useMemo } from "react";
 import { ArrowLeftIcon } from "@phosphor-icons/react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { AnalysisPanel } from "@/features/analysis/analysis-panel";
 import { LiveChart } from "@/features/metrics/live-chart";
 import { CATEGORIES, formatMetricValue } from "@/lib/metrics";
 import { computeStats } from "@/lib/stats";
@@ -76,6 +77,7 @@ export function DetailPage() {
       <p className="text-[10px] text-muted-foreground/70">
         Statistics are computed over the live window buffered since connecting.
       </p>
+      <AnalysisPanel selectedSeriesKey={detailSeriesKey ?? ""} />
     </div>
   );
 }

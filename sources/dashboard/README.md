@@ -25,15 +25,16 @@ The dashboard builds to **standalone static files**. Host the `dist/` output any
 1. `GET /api/agents` — probe + list connected agents.
 2. Open `WS /ws?agent_id={id}`, then `POST /api/agents/{id}/stream` to start streaming.
 3. The socket pushes binary protobuf `MetricBatch` frames, decoded with `@bufbuild/protobuf`.
+4. The analysis panel on the detail page calls `POST /api/agents/{id}/analyze` with a time window and a pair of series. The server reads stored metrics and returns the Analysis sidecar's JSON result; the dashboard never calls the sidecar directly. The endpoint returns `503` when the database or analysis sidecar is disabled.
 
-There is **no history/persistence** yet — the UI shows a rolling live tail only.
+The live views use a rolling in-memory tail only; persisted history and analysis require the remote deployment with TimescaleDB and the Analysis sidecar.
 
 ## Layout
 
 - `src/app/` — entry, provider, router, route pages
 - `src/components/` — shared + shadcn `ui/` components, charts, layout
-- `src/features/` — domain logic (`metrics/`, `agents/`, `connection/`)
-- `src/stores/` — Zustand stores (connection, agent, metrics, ui)
+- `src/features/` — domain logic (`metrics/`, `analysis/`, `agents/`, `connection/`)
+- `src/stores/` — Zustand stores (connection, agent, metrics, analysis, ui)
 - `src/api/client.ts` — HTTP + WS URL helpers and fetchers
-- `src/lib/` — formatting, colors, stats, metric metadata
+- `src/lib/` — formatting, colors, stats, metric metadata, analysis result types
 - `src/proto/gen/` — protobuf codegen (do not edit by hand)

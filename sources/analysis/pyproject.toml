@@ -1,0 +1,41 @@
+[project]
+name = "volta-analysis"
+version = "0.1.0"
+description = "Metrics analysis core shared by the Volta CLI and server sidecar"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.115",
+    "numpy>=2.0",
+    "pydantic>=2.9",
+    "uvicorn>=0.30",
+]
+
+[project.scripts]
+volta-analyze = "volta_analysis.cli:main"
+
+[dependency-groups]
+dev = [
+    "httpx>=0.27",
+    "pytest>=8.3",
+    "ruff>=0.7",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/volta_analysis"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+
+[tool.ruff]
+src = ["src", "tests"]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]

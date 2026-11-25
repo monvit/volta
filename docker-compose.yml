@@ -27,6 +27,13 @@ services:
     command: ["volta-migrate", "up"]
     restart: "no"
 
+  analysis:
+    image: volta-analysis:local
+    build:
+      context: ./sources/analysis
+      dockerfile: Dockerfile
+    restart: unless-stopped
+
   server:
     image: volta-server:local
     build:
@@ -35,10 +42,14 @@ services:
     depends_on:
       migrate:
         condition: service_completed_successfully
+      analysis:
+        condition: service_healthy
     environment:
       DB_ENABLED: "true"
       DB_DSN: postgres://volta:volta@timescaledb:5432/volta?sslmode=disable
       DB_RETENTION_DAYS: "30"
+      ANALYSIS_ENABLED: "true"
+      ANALYSIS_URL: http://analysis:8000
     ports:
       - "5000:5000"
       - "8080:8080"

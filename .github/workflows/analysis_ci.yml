@@ -1,0 +1,41 @@
+name: Analysis CI
+
+on:
+  push:
+    branches: [ "main", "devel" ]
+    paths:
+      - 'sources/analysis/**'
+      - '.github/workflows/analysis_ci.yml'
+  pull_request:
+    branches: [ "main", "devel" ]
+    paths:
+      - 'sources/analysis/**'
+      - '.github/workflows/analysis_ci.yml'
+
+jobs:
+  lint-and-test:
+    name: Analysis Lint & Test
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: sources/analysis
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Setup uv
+      uses: astral-sh/setup-uv@v6
+      with:
+        enable-cache: true
+
+    - name: Sync dependencies
+      run: uv sync --frozen
+
+    - name: Lint
+      run: |
+        uv run ruff check .
+        uv run ruff format --check .
+
+    - name: Test
+      run: uv run pytest

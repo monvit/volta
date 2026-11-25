@@ -14,6 +14,7 @@ import (
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 
+	"github.com/monvit/volta/server/internal/analysis"
 	commandrouter "github.com/monvit/volta/server/internal/commandRouter"
 	dbstore "github.com/monvit/volta/server/internal/db"
 	"github.com/monvit/volta/server/internal/hub"
@@ -29,6 +30,7 @@ type HTTPServer struct {
 	router         *commandrouter.CommandRouter
 	hub            *hub.WSHub
 	store          *dbstore.Store
+	analyzer       *analysis.Client
 	allowedOrigins []string
 	mux            *chi.Mux
 }
@@ -38,6 +40,7 @@ func NewHTTPServer(
 	router *commandrouter.CommandRouter,
 	hub *hub.WSHub,
 	store *dbstore.Store,
+	analyzer *analysis.Client,
 	allowedOrigins []string,
 ) *HTTPServer {
 	s := &HTTPServer{
@@ -45,6 +48,7 @@ func NewHTTPServer(
 		router:         router,
 		hub:            hub,
 		store:          store,
+		analyzer:       analyzer,
 		allowedOrigins: allowedOrigins,
 	}
 	s.mux = s.routes()
@@ -67,6 +71,7 @@ func (s *HTTPServer) routes() *chi.Mux {
 	mux.Route("/api", func(r chi.Router) {
 		r.Get("/agents", s.HandleListAgents)
 		r.Get("/agents/{id}/metrics", s.HandleAgentMetrics)
+		r.Post("/agents/{id}/analyze", s.HandleAnalyze)
 		r.Post("/agents/{id}/stream", s.HandleStreamData)
 		r.Post("/agents/{id}/send", s.HandleSendData)
 	})
@@ -192,6 +197,139 @@ func (s *HTTPServer) HandleAgentMetrics(w http.ResponseWriter, r *http.Request) 
 	writeJSON(w, http.StatusOK, map[string]any{"points": points})
 }
 
+type analyzeRequest struct {
+	From          string      `json:"from"`
+	To            string      `json:"to"`
+	MetricTypes   []int16     `json:"metric_types"`
+	BucketSeconds int         `json:"bucket_seconds"`
+	Sigma         float64     `json:"sigma"`
+	MinPoints     int         `json:"min_points"`
+	Pairs         [][2]string `json:"pairs"`
+}
+
+// POST /api/agents/{id}/analyze
+func (s *HTTPServer) HandleAnalyze(w http.ResponseWriter, r *http.Request) {
+	if s.store == nil {
+		http.Error(w, "database is disabled", http.StatusServiceUnavailable)
+		return
+	}
+	if !s.analyzer.Enabled() {
+		http.Error(w, "analysis is disabled", http.StatusServiceUnavailable)
+		return
+	}
+
+	defer r.Body.Close()
+	payload := analyzeRequest{BucketSeconds: 60, Sigma: 3, MinPoints: 8}
+	if err := json.NewDecoder(io.LimitReader(r.Body, 1<<20)).Decode(&payload); err != nil {
+		if !errors.Is(err, io.EOF) {
+			http.Error(w, "invalid request body", http.StatusBadRequest)
+			return
+		}
+	}
+
+	fromValues := r.URL.Query()["from"]
+	if payload.From != "" {
+		fromValues = []string{payload.From}
+	}
+	toValues := r.URL.Query()["to"]
+	if payload.To != "" {
+		toValues = []string{payload.To}
+	}
+	from, to, err := parseTimeRangeValues(fromValues, toValues)
+	if err != nil {
+		http.Error(w, "invalid from/to timestamps", http.StatusBadRequest)
+		return
+	}
+	if !from.Before(to) {
+		http.Error(w, "from must be before to", http.StatusBadRequest)
+		return
+	}
+	if payload.BucketSeconds < 1 || payload.Sigma <= 0 || payload.MinPoints < 2 {
+		http.Error(w, "invalid analysis options", http.StatusBadRequest)
+		return
+	}
+	if len(payload.MetricTypes) > 64 || len(payload.Pairs) > 32 {
+		http.Error(w, "too many metric types or pairs", http.StatusBadRequest)
+		return
+	}
+
+	allowed := make(map[int16]struct{}, len(payload.MetricTypes))
+	for _, metricType := range payload.MetricTypes {
+		name, ok := pbt.MetricType_name[int32(metricType)]
+		if !ok || name == "METRIC_TYPE_UNSPECIFIED" {
+			http.Error(w, "invalid metric_type", http.StatusBadRequest)
+			return
+		}
+		allowed[metricType] = struct{}{}
+	}
+	for _, pair := range payload.Pairs {
+		if pair[0] == "" || pair[1] == "" {
+			http.Error(w, "invalid pair", http.StatusBadRequest)
+			return
+		}
+	}
+
+	points, err := s.store.Query(r.Context(), dbstore.QueryOptions{
+		AgentID: chi.URLParam(r, "id"),
+		From:    from,
+		To:      to,
+		Limit:   s.analyzer.MaxRows(),
+	})
+	if err != nil {
+		logger.Error("db query failed: %v", err)
+		http.Error(w, "internal server error", http.StatusInternalServerError)
+		return
+	}
+
+	rows := make([]analysis.Point, 0, len(points))
+	for _, point := range points {
+		if len(allowed) > 0 {
+			if _, ok := allowed[point.MetricType]; !ok {
+				continue
+			}
+		}
+		name, ok := pbt.MetricType_name[int32(point.MetricType)]
+		if !ok || name == "METRIC_TYPE_UNSPECIFIED" {
+			continue
+		}
+		deviceID := "system"
+		if point.DeviceID != nil && *point.DeviceID != "" {
+			deviceID = *point.DeviceID
+		}
+		rows = append(rows, analysis.Point{
+			MetricType:  name,
+			DeviceID:    deviceID,
+			TimestampNS: point.TS.UnixNano(),
+			Value:       point.Value,
+		})
+	}
+
+	result, err := s.analyzer.Analyze(r.Context(), analysis.Request{
+		Source: "database",
+		Points: rows,
+		Options: analysis.Options{
+			BucketSeconds: payload.BucketSeconds,
+			Sigma:         payload.Sigma,
+			MinPoints:     payload.MinPoints,
+			Pairs:         payload.Pairs,
+		},
+	})
+	switch {
+	case errors.Is(err, analysis.ErrInvalidRequest):
+		http.Error(w, err.Error(), http.StatusBadRequest)
+	case errors.Is(err, analysis.ErrDisabled):
+		http.Error(w, "analysis is disabled", http.StatusServiceUnavailable)
+	case errors.Is(err, analysis.ErrUnavailable):
+		logger.Error("analysis service unavailable: %v", err)
+		http.Error(w, "analysis service unavailable", http.StatusBadGateway)
+	case err != nil:
+		logger.Error("analysis failed: %v", err)
+		http.Error(w, "internal server error", http.StatusInternalServerError)
+	default:
+		writeJSON(w, http.StatusOK, json.RawMessage(result))
+	}
+}
+
 // POST /api/agents/{id}/stream
 func (s *HTTPServer) HandleStreamData(w http.ResponseWriter, r *http.Request) {
 	agentID := chi.URLParam(r, "id")
@@ -265,10 +403,14 @@ func readBody(r *http.Request) []byte {
 }
 
 func parseTimeRange(r *http.Request) (time.Time, time.Time, error) {
+	return parseTimeRangeValues(r.URL.Query()["from"], r.URL.Query()["to"])
+}
+
+func parseTimeRangeValues(fromValues, toValues []string) (time.Time, time.Time, error) {
 	to := time.Now()
 	from := to.Add(-time.Hour)
 
-	for _, v := range r.URL.Query()["from"] {
+	for _, v := range fromValues {
 		t, err := time.Parse(time.RFC3339Nano, v)
 		if err != nil {
 			return time.Time{}, time.Time{}, err
@@ -276,7 +418,7 @@ func parseTimeRange(r *http.Request) (time.Time, time.Time, error) {
 		from = t
 	}
 
-	for _, v := range r.URL.Query()["to"] {
+	for _, v := range toValues {
 		t, err := time.Parse(time.RFC3339Nano, v)
 		if err != nil {
 			return time.Time{}, time.Time{}, err

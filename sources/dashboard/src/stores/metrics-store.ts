@@ -1,6 +1,12 @@
 import { create } from "zustand";
 import type { MetricBatch, MetricType } from "@/proto/gen/types/metric_pb";
-import { formatDeviceId, getMetricMeta, seriesKey, type MetricCategory } from "@/lib/metrics";
+import {
+  analysisSeriesKey,
+  formatDeviceId,
+  getMetricMeta,
+  seriesKey,
+  type MetricCategory,
+} from "@/lib/metrics";
 import { nsToMs } from "@/lib/format";
 
 /** Rolling window kept per series. At ~1 Hz this is ~10 minutes of live tail. */
@@ -10,6 +16,7 @@ export type StreamStatus = "idle" | "connecting" | "open" | "reconnecting";
 
 export interface LiveSeries {
   key: string;
+  analysisKey: string;
   type: MetricType;
   category: MetricCategory;
   label: string;
@@ -61,6 +68,7 @@ const useMetricsStore = create<MetricsState>((set) => ({
         const meta = getMetricMeta(type);
         const next: LiveSeries = {
           key,
+          analysisKey: analysisSeriesKey(type, device),
           type,
           category: meta.category,
           label: meta.label,
