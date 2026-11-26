@@ -2,13 +2,16 @@
 
 #include <fcntl.h>
 #include <poll.h>
+#include <sys/eventfd.h>
 #include <sys/file.h>
 #include <sys/socket.h>
 #include <sys/stat.h>
+#include <sys/time.h>
 #include <sys/un.h>
 #include <unistd.h>
 
 #include <cerrno>
+#include <chrono>
 #include <cstddef>
 #include <cstring>
 #include <stdexcept>
@@ -19,6 +22,18 @@ namespace volta {
 namespace agent {
 namespace control {
 namespace {
+
+constexpr int kListenBacklog = 16;
+constexpr int kAcceptBackoffMs = 100;
+
+template <typename Call>
+auto RetryOnEintr(Call call) {
+  decltype(call()) rc;
+  do {
+    rc = call();
+  } while (rc < 0 && errno == EINTR);
+  return rc;
+}
 
 class ScopedUmask {
  public:
@@ -44,6 +59,11 @@ sockaddr_un MakeAddr(const std::string& path, socklen_t* len_out) {
   return addr;
 }
 
+int MapTimeoutErrno(int err) {
+  if (err == EAGAIN || err == EWOULDBLOCK) return ETIMEDOUT;
+  return err;
+}
+
 }  // namespace
 
 const char* DescribeSendError(int err) {
@@ -57,78 +77,128 @@ const char* DescribeSendError(int err) {
       return "permission denied (need root or membership of the socket group)";
     case EMSGSIZE:
       return "message too large for control socket";
+    case ETIMEDOUT:
+      return "timed out waiting for the daemon";
+    case ECONNRESET:
+      return "daemon closed the connection without replying";
+    case EBADMSG:
+      return "invalid reply from daemon";
     default:
       return std::strerror(err);
   }
 }
 
-ControlSocket::ControlSocket(std::string path, Role role,
+std::optional<ControlReply> SendRequest(const std::string& path,
+                                        std::string_view message, int* err_out,
+                                        ClientOptions opts) {
+  auto fail = [&](int err) -> std::optional<ControlReply> {
+    if (err_out) *err_out = err;
+    return std::nullopt;
+  };
+
+  if (path.empty() || message.empty() || opts.max_message_size == 0 ||
+      opts.timeout_ms <= 0) {
+    return fail(EINVAL);
+  }
+  if (path.size() >= sizeof(sockaddr_un::sun_path)) {
+    return fail(ENAMETOOLONG);
+  }
+  if (message.size() > opts.max_message_size) {
+    return fail(EMSGSIZE);
+  }
+
+  UniqueFd fd(::socket(AF_UNIX, SOCK_SEQPACKET | SOCK_CLOEXEC, 0));
+  if (!fd) return fail(errno);
+
+  // SO_SNDTIMEO / SO_RCVTIMEO apply per syscall step rather than as a single
+  // total wall-clock budget.
+  timeval tv{};
+  tv.tv_sec = opts.timeout_ms / 1000;
+  tv.tv_usec = (opts.timeout_ms % 1000) * 1000;
+  if (::setsockopt(fd.get(), SOL_SOCKET, SO_SNDTIMEO, &tv, sizeof(tv)) != 0 ||
+      ::setsockopt(fd.get(), SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv)) != 0) {
+    return fail(errno);
+  }
+
+  socklen_t len = 0;
+  sockaddr_un addr = MakeAddr(path, &len);
+  if (RetryOnEintr([&] {
+        return ::connect(fd.get(), reinterpret_cast<sockaddr*>(&addr), len);
+      }) != 0) {
+    return fail(MapTimeoutErrno(errno));
+  }
+
+  if (RetryOnEintr([&] {
+        return ::send(fd.get(), message.data(), message.size(), MSG_NOSIGNAL);
+      }) < 0) {
+    return fail(MapTimeoutErrno(errno));
+  }
+
+  std::vector<char> buf(opts.max_message_size);
+  const ssize_t n = RetryOnEintr(
+      [&] { return ::recv(fd.get(), buf.data(), buf.size(), MSG_TRUNC); });
+  if (n < 0) return fail(MapTimeoutErrno(errno));
+  if (n == 0) return fail(ECONNRESET);
+  if (static_cast<std::size_t>(n) > buf.size()) return fail(EMSGSIZE);
+
+  auto reply =
+      DecodeReply(std::string_view(buf.data(), static_cast<std::size_t>(n)));
+  if (!reply) return fail(EBADMSG);
+  return reply;
+}
+
+ControlSocket::ControlSocket(std::string path,
                              std::unique_ptr<logging::Logger> logger,
                              Options opts)
-    : path_(std::move(path)),
-      role_(role),
-      opts_(opts),
-      logger_(std::move(logger)) {
+    : path_(std::move(path)), opts_(opts), logger_(std::move(logger)) {
   if (path_.empty()) {
     throw std::invalid_argument("control socket path must not be empty");
   }
   if (opts_.max_message_size == 0) {
     throw std::invalid_argument("max_message_size must be > 0");
   }
-  // Reject overlong paths before socket() so a throw does not leak an fd.
-  socklen_t ignored = 0;
-  MakeAddr(path_, &ignored);
+  if (opts_.peer_idle_timeout_ms <= 0) {
+    throw std::invalid_argument("peer_idle_timeout_ms must be > 0");
+  }
 
-  fd_ = ::socket(AF_UNIX, SOCK_DGRAM | SOCK_CLOEXEC, 0);
-  if (fd_ < 0) {
-    throw std::runtime_error(std::string("socket(AF_UNIX, SOCK_DGRAM): ") +
+  fd_ = UniqueFd(
+      ::socket(AF_UNIX, SOCK_SEQPACKET | SOCK_CLOEXEC | SOCK_NONBLOCK, 0));
+  if (!fd_) {
+    throw std::runtime_error(std::string("socket(AF_UNIX, SOCK_SEQPACKET): ") +
                              std::strerror(errno));
   }
-  if (role_ == Role::kServer) BindServer();
+  BindServer();
 }
 
 ControlSocket::~ControlSocket() {
   StopListening();
-  CloseFd();
-  if (owns_path_) {
-    // ENOENT is success: systemd may already have removed the runtime dir.
-    if (::unlink(path_.c_str()) != 0 && errno != ENOENT) {
-      logger_->Log(logging::LogLevel::ERROR_LEVEL,
-                   "control socket unlink({}): {}", path_,
-                   std::strerror(errno));
-    }
-  }
-  CloseLockFd();
+  UnlinkSocketFile();
 }
 
-void ControlSocket::CloseFd() {
-  if (fd_ >= 0) {
-    ::close(fd_);
-    fd_ = -1;
-  }
-  connected_ = false;
-}
-
-void ControlSocket::CloseLockFd() {
-  if (lock_fd_ >= 0) {
-    ::close(lock_fd_);
-    lock_fd_ = -1;
+// lock_fd_ is a member, so it is closed only after this runs (also on the
+// constructor-throw path), keeping the single-instance lock held across unlink.
+void ControlSocket::UnlinkSocketFile() {
+  // ENOENT is success: systemd may already have removed the runtime dir.
+  if (::unlink(path_.c_str()) != 0 && errno != ENOENT) {
+    logger_->Log(logging::LogLevel::ERROR_LEVEL,
+                 "control socket unlink({}): {}", path_, std::strerror(errno));
   }
 }
 
 void ControlSocket::BindServer() {
+  socklen_t len = 0;
+  sockaddr_un addr = MakeAddr(path_, &len);
+
   const std::string lock_path = path_ + ".lock";
-  lock_fd_ = ::open(lock_path.c_str(), O_CREAT | O_RDWR | O_CLOEXEC, 0660);
-  if (lock_fd_ < 0) {
+  lock_fd_ =
+      UniqueFd(::open(lock_path.c_str(), O_CREAT | O_RDWR | O_CLOEXEC, 0660));
+  if (!lock_fd_) {
     int saved = errno;
-    CloseFd();
     throw std::runtime_error(std::string("open(") + lock_path +
                              "): " + std::strerror(saved));
   }
-  if (::flock(lock_fd_, LOCK_EX | LOCK_NB) != 0) {
+  if (::flock(lock_fd_.get(), LOCK_EX | LOCK_NB) != 0) {
     int saved = errno;
-    CloseLockFd();
-    CloseFd();
     if (saved == EWOULDBLOCK || saved == EAGAIN) {
       throw std::runtime_error("control socket already running");
     }
@@ -139,14 +209,9 @@ void ControlSocket::BindServer() {
   // Stale inode from a crashed non-systemd run. Harmless if absent.
   if (::unlink(path_.c_str()) != 0 && errno != ENOENT) {
     int saved = errno;
-    CloseLockFd();
-    CloseFd();
     throw std::runtime_error(std::string("unlink(") + path_ +
                              "): " + std::strerror(saved));
   }
-
-  socklen_t len = 0;
-  sockaddr_un addr = MakeAddr(path_, &len);
 
   // Bind creates the inode as 0777 masked by umask. Tighten the umask for
   // the bind, then chmod to the exact mode.
@@ -155,148 +220,142 @@ void ControlSocket::BindServer() {
   int bind_errno = 0;
   {
     ScopedUmask umask_guard(bind_umask);
-    bind_rc = ::bind(fd_, reinterpret_cast<sockaddr*>(&addr), len);
+    bind_rc = ::bind(fd_.get(), reinterpret_cast<sockaddr*>(&addr), len);
     bind_errno = errno;
   }
   if (bind_rc != 0) {
-    CloseLockFd();
-    CloseFd();
     throw std::runtime_error(std::string("bind(") + path_ +
                              "): " + std::strerror(bind_errno));
   }
-  owns_path_ = true;
 
   if (::chmod(path_.c_str(), opts_.mode) != 0) {
     int saved = errno;
-    CloseLockFd();
-    CloseFd();
-    ::unlink(path_.c_str());
-    owns_path_ = false;
+    UnlinkSocketFile();
     throw std::runtime_error(std::string("chmod(") + path_ +
                              "): " + std::strerror(saved));
   }
 
-  int flags = ::fcntl(fd_, F_GETFL, 0);
-  if (flags >= 0) ::fcntl(fd_, F_SETFL, flags | O_NONBLOCK);
-}
-
-bool ControlSocket::EnsureClientConnected(int* err_out) {
-  if (connected_) return true;
-  socklen_t len = 0;
-  sockaddr_un addr = MakeAddr(path_, &len);
-  if (::connect(fd_, reinterpret_cast<sockaddr*>(&addr), len) != 0) {
-    if (err_out) *err_out = errno;
-    return false;
+  if (::listen(fd_.get(), kListenBacklog) != 0) {
+    int saved = errno;
+    UnlinkSocketFile();
+    throw std::runtime_error(std::string("listen(") + path_ +
+                             "): " + std::strerror(saved));
   }
-  connected_ = true;
-  return true;
-}
-
-bool ControlSocket::Send(std::string_view message, int* err_out) {
-  if (role_ != Role::kClient) {
-    throw std::logic_error("Send() called on a server control socket");
-  }
-  if (message.size() > opts_.max_message_size) {
-    if (err_out) *err_out = EMSGSIZE;
-    return false;
-  }
-  if (!EnsureClientConnected(err_out)) return false;
-
-  ssize_t n = ::send(fd_, message.data(), message.size(), MSG_NOSIGNAL);
-  if (n < 0 && (errno == ECONNREFUSED || errno == ENOTCONN || errno == EPIPE)) {
-    connected_ = false;
-    if (!EnsureClientConnected(err_out)) return false;
-    n = ::send(fd_, message.data(), message.size(), MSG_NOSIGNAL);
-  }
-  if (n < 0) {
-    if (err_out) *err_out = errno;
-    return false;
-  }
-  if (static_cast<std::size_t>(n) != message.size()) {
-    if (err_out) *err_out = EMSGSIZE;
-    return false;
-  }
-  return true;
 }
 
 void ControlSocket::Listen(MessageHandler handler) {
-  if (role_ != Role::kServer) {
-    throw std::logic_error("Listen() called on a client control socket");
-  }
-  if (listening_.load()) return;
+  if (recv_thread_.joinable()) return;
   handler_ = std::move(handler);
-  listening_.store(true);
+  wake_fd_ = UniqueFd(::eventfd(0, EFD_CLOEXEC));
+  if (!wake_fd_) {
+    int saved = errno;
+    throw std::runtime_error(std::string("eventfd: ") + std::strerror(saved));
+  }
   recv_thread_ = std::thread([this] { RecvLoop(); });
 }
 
 void ControlSocket::StopListening() {
-  listening_.store(false);
-  if (recv_thread_.joinable()) recv_thread_.join();
+  if (!recv_thread_.joinable()) return;
+  ::eventfd_write(wake_fd_.get(), 1);
+  recv_thread_.join();
+  wake_fd_.reset();
 }
 
-bool ControlSocket::WaitForDatagram(int fd,
-                                    const std::atomic<bool>& listening) {
-  while (listening.load()) {
-    pollfd pfd{};
-    pfd.fd = fd;
-    pfd.events = POLLIN;
-    int ready = ::poll(&pfd, 1, 200);
+ControlSocket::PollResult ControlSocket::WaitForFd(int fd, int timeout_ms) {
+  pollfd pfds[2]{};
+  pfds[0].fd = fd;
+  pfds[0].events = POLLIN;
+  pfds[1].fd = wake_fd_.get();
+  pfds[1].events = POLLIN;
+
+  const auto deadline = timeout_ms > 0
+                            ? std::chrono::steady_clock::now() +
+                                  std::chrono::milliseconds(timeout_ms)
+                            : std::chrono::steady_clock::time_point{};
+
+  while (true) {
+    int remaining_ms = timeout_ms;
+    if (timeout_ms > 0) {
+      const auto left = std::chrono::duration_cast<std::chrono::milliseconds>(
+                            deadline - std::chrono::steady_clock::now())
+                            .count();
+      if (left <= 0) return PollResult::kTimeout;
+      remaining_ms = static_cast<int>(left);
+    }
+
+    int ready = ::poll(pfds, 2, remaining_ms);
     if (ready < 0) {
       if (errno == EINTR) continue;
-      if (listening.load()) {
-        logger_->Log(logging::LogLevel::ERROR_LEVEL, "control socket poll: {}",
-                     std::strerror(errno));
-      }
-      return false;
-    }
-    if (ready == 0) continue;
-    return listening.load();
-  }
-  return false;
-}
-
-ControlSocket::DatagramRead ControlSocket::ReadDatagram(int fd,
-                                                        std::vector<char>& buf,
-                                                        bool still_listening,
-                                                        std::string* message) {
-  ssize_t n = ::recv(fd, buf.data(), buf.size(), MSG_TRUNC);
-  if (n < 0) {
-    if (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR) {
-      return DatagramRead::kRetry;
-    }
-    if (still_listening) {
-      logger_->Log(logging::LogLevel::ERROR_LEVEL, "control socket recv: {}",
+      logger_->Log(logging::LogLevel::ERROR_LEVEL, "control socket poll: {}",
                    std::strerror(errno));
+      return PollResult::kStop;
     }
-    return DatagramRead::kStop;
+    if (ready == 0) return PollResult::kTimeout;
+    // Shutdown wins over a peer event that arrived in the same wake.
+    if (pfds[1].revents != 0) return PollResult::kStop;
+    if (pfds[0].revents != 0) return PollResult::kReady;
   }
-  if (static_cast<std::size_t>(n) > buf.size()) {
-    logger_->Log(logging::LogLevel::ERROR_LEVEL,
-                 "control socket: dropped truncated datagram");
-    return DatagramRead::kRetry;
-  }
-  message->assign(buf.data(), static_cast<std::size_t>(n));
-  return DatagramRead::kMessage;
 }
 
 void ControlSocket::RecvLoop() {
   std::vector<char> buf(opts_.max_message_size);
-  while (WaitForDatagram(fd_, listening_)) {
-    std::string message;
-    switch (ReadDatagram(fd_, buf, listening_.load(), &message)) {
-      case DatagramRead::kRetry:
+  while (WaitForFd(fd_.get(), -1) == PollResult::kReady) {
+    UniqueFd conn(::accept4(fd_.get(), nullptr, nullptr, SOCK_CLOEXEC));
+    if (!conn) {
+      const int err = errno;
+      if (err == EINTR || err == EAGAIN || err == EWOULDBLOCK ||
+          err == ECONNABORTED) {
         continue;
-      case DatagramRead::kStop:
+      }
+      logger_->Log(logging::LogLevel::ERROR_LEVEL, "control socket accept4: {}",
+                   std::strerror(err));
+      pollfd wake_pfd{wake_fd_.get(), POLLIN, 0};
+      if (::poll(&wake_pfd, 1, kAcceptBackoffMs) > 0 && wake_pfd.revents != 0) {
         return;
-      case DatagramRead::kMessage:
-        break;
+      }
+      continue;
     }
-    if (!handler_) continue;
-    try {
-      handler_(message);
-    } catch (const std::exception& ex) {
-      logger_->Log(logging::LogLevel::ERROR_LEVEL, "control socket handler: {}",
-                   ex.what());
+
+    PollResult wait = WaitForFd(conn.get(), opts_.peer_idle_timeout_ms);
+    if (wait == PollResult::kStop) return;
+    if (wait == PollResult::kTimeout) continue;
+
+    const ssize_t n = RetryOnEintr(
+        [&] { return ::recv(conn.get(), buf.data(), buf.size(), MSG_TRUNC); });
+    if (n <= 0) {
+      if (n < 0) {
+        logger_->Log(logging::LogLevel::ERROR_LEVEL, "control socket recv: {}",
+                     std::strerror(errno));
+      }
+      continue;
+    }
+
+    ControlReply reply{false, "Command too large"};
+    if (static_cast<std::size_t>(n) > buf.size()) {
+      logger_->Log(logging::LogLevel::WARNING_LEVEL,
+                   "control socket: rejected truncated command");
+    } else {
+      try {
+        reply =
+            handler_(std::string_view(buf.data(), static_cast<std::size_t>(n)));
+      } catch (const std::exception& ex) {
+        logger_->Log(logging::LogLevel::ERROR_LEVEL,
+                     "control socket handler: {}", ex.what());
+        reply = {false, "Internal error"};
+      } catch (...) {
+        logger_->Log(logging::LogLevel::ERROR_LEVEL,
+                     "control socket handler: unknown exception");
+        reply = {false, "Internal error"};
+      }
+    }
+
+    const std::string encoded = Encode(reply);
+    if (RetryOnEintr([&] {
+          return ::send(conn.get(), encoded.data(), encoded.size(),
+                        MSG_NOSIGNAL);
+        }) < 0) {
+      logger_->Log(logging::LogLevel::WARNING_LEVEL, "control socket send: {}",
+                   std::strerror(errno));
     }
   }
 }

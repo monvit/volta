@@ -168,6 +168,7 @@ if(BUILD_TESTING)
         tests/config_resolution_test.cc
         tests/control_command_test.cc
         tests/control_socket_test.cc
+        tests/exporter_test.cc
     )
     target_link_libraries(volta_tests PRIVATE
         volta_lib

@@ -1,20 +1,36 @@
 #include "exporter.h"
 
-#include <mutex>
+#include <cerrno>
+#include <chrono>
+#include <cstring>
+#include <format>
+#include <sstream>
+#include <system_error>
+#include <utility>
 #include <variant>
 
 namespace volta {
 namespace agent {
+namespace {
 
-Exporter::Exporter(const config::Config& cfg) : dump_file_() {
-  if (std::filesystem::exists(cfg.dump_dir)) {
-    dump_dir_ = cfg.dump_dir;
+DumpRequestResult OpenFailure(int err, const std::filesystem::path& dir,
+                              const std::filesystem::path& file) {
+  if (err == ENOENT) {
+    return {DumpRequestStatus::kDirectoryMissing, dir, 0};
   }
+  if (err == ENOTDIR) {
+    return {DumpRequestStatus::kNotADirectory, dir, 0};
+  }
+  return {DumpRequestStatus::kOpenFailed, file, err != 0 ? err : EIO};
 }
+
+}  // namespace
+
+Exporter::Exporter(const config::Config& cfg) : dump_dir_(cfg.dump_dir) {}
 
 void Exporter::Dump(const std::vector<Metric>& metrics) {
   std::lock_guard lock(mu_);
-  if (!is_exporting) return;
+  if (!dump_file_.is_open()) return;
 
   for (const auto& metric : metrics)
     dump_file_ << MetricType_Name(metric.type) << ";" << DescribeDevice(metric)
@@ -22,33 +38,57 @@ void Exporter::Dump(const std::vector<Metric>& metrics) {
   dump_file_.flush();
 }
 
-void Exporter::StartDump(
+DumpRequestResult Exporter::StartDump(
     std::optional<std::filesystem::path> dump_dir_overload) {
   std::lock_guard lock(mu_);
-  if (is_exporting) return;
+  if (dump_file_.is_open()) {
+    return {DumpRequestStatus::kAlreadyRunning, active_path_, 0};
+  }
 
-  auto dir = dump_dir_overload.has_value() ? *dump_dir_overload : dump_dir_;
-  if (!std::filesystem::exists(dir)) return;
+  const auto dir =
+      dump_dir_overload.has_value() ? *dump_dir_overload : dump_dir_;
+  if (dir.empty()) {
+    return {DumpRequestStatus::kDirectoryMissing, dir, 0};
+  }
 
-  dump_file_.open(dir.string() + std::format("/dump_{}.csv",
-                                             std::chrono::system_clock::now()),
-                  std::ios_base::out | std::ios_base::trunc);
-  if (!dump_file_.is_open()) return;
+  const auto file_path =
+      dir / std::format("dump_{}.csv", std::chrono::system_clock::now());
 
+  errno = 0;
+  dump_file_.open(file_path, std::ios::out | std::ios::trunc);
+  const int open_errno = errno;
+  if (!dump_file_.is_open()) {
+    return OpenFailure(open_errno, dir, file_path);
+  }
+
+  errno = 0;
   dump_file_ << "metric_type;device_id;timestamp;value\n";
   dump_file_.flush();
-  is_exporting = true;
+  const int write_errno = errno;
+  if (!dump_file_) {
+    // close() retries the flush and remove() both overwrite errno.
+    const int err = write_errno != 0 ? write_errno : EIO;
+    dump_file_.close();
+    std::error_code ec;
+    std::filesystem::remove(file_path, ec);
+    return {DumpRequestStatus::kOpenFailed, file_path, err};
+  }
+
+  active_path_ = file_path;
+  return {DumpRequestStatus::kStarted, active_path_, 0};
 }
 
-void Exporter::EndDump() {
+std::optional<std::filesystem::path> Exporter::EndDump() {
   std::lock_guard lock(mu_);
-  if (dump_file_.is_open()) dump_file_.close();
-  is_exporting = false;
+  if (!dump_file_.is_open()) return std::nullopt;
+
+  dump_file_.close();
+  return std::exchange(active_path_, {});
 }
 
 bool Exporter::IsActive() const {
   std::lock_guard lock(mu_);
-  return is_exporting;
+  return dump_file_.is_open();
 }
 
 std::string Exporter::DescribeDevice(const Metric& m) {
@@ -75,6 +115,32 @@ std::string Exporter::DescribeDevice(const Metric& m) {
   else
     out << "system";
   return out.str();
+}
+
+control::ControlReply FormatDumpReply(const DumpRequestResult& result) {
+  switch (result.status) {
+    case DumpRequestStatus::kStarted:
+      return {true, "Dump started: " + result.path.string()};
+    case DumpRequestStatus::kAlreadyRunning:
+      return {false, "Dump already running: " + result.path.string()};
+    case DumpRequestStatus::kDirectoryMissing:
+      if (result.path.empty()) {
+        return {false, "Dump directory not configured"};
+      }
+      return {false, "Dump directory does not exist: " + result.path.string()};
+    case DumpRequestStatus::kNotADirectory:
+      return {false, "Dump path is not a directory: " + result.path.string()};
+    case DumpRequestStatus::kOpenFailed:
+      return {false, "Cannot open dump file: " + result.path.string() + ": " +
+                         std::strerror(result.error)};
+  }
+  return {false, "Internal error"};
+}
+
+control::ControlReply FormatDumpReply(
+    const std::optional<std::filesystem::path>& stopped) {
+  if (!stopped.has_value()) return {true, "No dump was running"};
+  return {true, "Dump stopped: " + stopped->string()};
 }
 
 }  // namespace agent

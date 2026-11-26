@@ -21,6 +21,21 @@ std::optional<ControlCommand> Decode(std::string_view payload) {
       std::filesystem::path(std::string(payload.substr(kPrefix.size())))};
 }
 
+std::string Encode(const ControlReply& reply) {
+  return std::string(reply.ok ? "ok\n" : "err\n") + reply.message;
+}
+
+std::optional<ControlReply> DecodeReply(std::string_view payload) {
+  const auto split = payload.find('\n');
+  if (split == std::string_view::npos) return std::nullopt;
+
+  const auto status = payload.substr(0, split);
+  const auto message = payload.substr(split + 1);
+  if (status == "ok") return ControlReply{true, std::string(message)};
+  if (status == "err") return ControlReply{false, std::string(message)};
+  return std::nullopt;
+}
+
 }  // namespace control
 }  // namespace agent
 }  // namespace volta
