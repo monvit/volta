@@ -184,20 +184,23 @@ export function seriesKey(type: MetricType, device?: DeviceID) {
   return `${type}::${formatDeviceId(device) ?? ""}`;
 }
 
-/** Device identifier in the same form as the agent's CSV exporter and the database. */
+/** Device identifier in the same form as the database. */
 export function analysisDeviceId(device?: DeviceID) {
   const d = device?.device;
   switch (d?.case) {
     case "cpu":
-      return `cpu=s${d.value.socketIndex}/${d.value.coreIndex}`;
+      return d.value.coreIndex > 0
+        ? `cpu:s${d.value.socketIndex}-c${d.value.coreIndex}`
+        : `cpu:s${d.value.socketIndex}`;
     case "gpu": {
+      const hex = (n: number, w: number) => n.toString(16).padStart(w, "0");
       const g = d.value;
-      return `gpu=${g.pciDomain}:${g.pciBus}:${g.pciDevice}.${g.pciFunction}`;
+      return `gpu:${hex(g.pciDomain, 4)}:${hex(g.pciBus, 2)}:${hex(g.pciDevice, 2)}.${g.pciFunction.toString(16)}`;
     }
     case "network":
-      return `net_ifindex=${d.value.ifindex}`;
+      return `net:ifindex${d.value.ifindex}`;
     case "disk":
-      return `disk=${d.value.major}:${d.value.minor}`;
+      return `disk:${d.value.major}:${d.value.minor}`;
     default:
       return "system";
   }

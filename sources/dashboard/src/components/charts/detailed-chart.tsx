@@ -18,7 +18,7 @@ function readChartChromeColors() {
   return { axis, grid };
 }
 
-function useChartChromeColors() {
+export function useChartChromeColors() {
   const [colors, setColors] = useState(readChartChromeColors);
 
   useEffect(() => {

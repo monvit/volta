@@ -3,16 +3,19 @@
 from __future__ import annotations
 
 import math
-from collections import defaultdict
+from collections import defaultdict, deque
 from collections.abc import Iterable
 
 import numpy as np
 
 from volta_analysis.model import (
+    AnalysisOptions,
     AnalysisRequest,
     AnalysisResult,
     Anomaly,
     Correlation,
+    MovingAveragePoint,
+    MovingAverageSeries,
     Point,
     Regression,
     Rollup,
@@ -41,11 +44,14 @@ def run(request: AnalysisRequest) -> AnalysisResult:
         current = rollup(points, options.bucket_seconds)
         rollups_by_key[key] = current
         result.rollups.append(current)
+        result.moving_averages.append(moving_average(points, options))
         result.anomalies.extend(detect_anomalies(points, options.sigma))
 
     for x, y in options.pairs:
         if x not in grouped or y not in grouped:
             result.warnings.append(f"pair not found: {x} / {y}")
+            continue
+        if x not in rollups_by_key or y not in rollups_by_key:
             continue
 
         xs, ys = align(rollups_by_key[x], rollups_by_key[y])
@@ -126,6 +132,43 @@ def rollup(points: list[Point], bucket_seconds: int) -> Rollup:
             )
             for index, values in sorted(buckets.items())
         ],
+    )
+
+
+def moving_average(points: list[Point], options: AnalysisOptions) -> MovingAverageSeries:
+    sma_period = options.sma_period
+    alpha = 2 / (options.ema_period + 1)
+    units_per_value = math.ulp(0.0).as_integer_ratio()[1]
+    window_scale = units_per_value * sma_period
+    window: deque[int] = deque()
+    total = 0
+    ema: float | None = None
+    averages: list[MovingAveragePoint] = []
+
+    for point in points:
+        value = point.value
+        if not math.isfinite(value):
+            continue
+
+        if len(window) == sma_period:
+            total -= window.popleft()
+        numerator, denominator = value.as_integer_ratio()
+        units = numerator * (units_per_value // denominator)
+        window.append(units)
+        total += units
+        sma = total / window_scale if len(window) == sma_period else None
+
+        if ema is None or options.ema_period == 1:
+            ema = value
+        elif (ema < 0) == (value < 0):
+            ema += alpha * (value - ema)
+        else:
+            ema = alpha * value + (1 - alpha) * ema
+
+        averages.append(MovingAveragePoint(timestamp_ns=point.timestamp_ns, sma=sma, ema=ema))
+
+    return MovingAverageSeries(
+        metric_type=points[0].metric_type, device_id=points[0].device_id, points=averages
     )
 
 

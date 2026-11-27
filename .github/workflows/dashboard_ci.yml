@@ -37,6 +37,9 @@ jobs:
     - name: Format, lint & typecheck
       run: vp check
 
+    - name: Test
+      run: vp run test
+
     - name: Build
       run: vp run build
       env:

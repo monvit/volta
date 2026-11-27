@@ -1,6 +1,7 @@
 package httpserver
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"io"
@@ -25,11 +26,15 @@ import (
 
 // ── HTTP Server ───────────────────────────────────────────────────────────────
 
+type metricStore interface {
+	Query(context.Context, dbstore.QueryOptions) ([]dbstore.Point, error)
+}
+
 type HTTPServer struct {
 	registry       *registry.AgentRegistry
 	router         *commandrouter.CommandRouter
 	hub            *hub.WSHub
-	store          *dbstore.Store
+	store          metricStore
 	analyzer       *analysis.Client
 	allowedOrigins []string
 	mux            *chi.Mux
@@ -47,9 +52,11 @@ func NewHTTPServer(
 		registry:       registry,
 		router:         router,
 		hub:            hub,
-		store:          store,
 		analyzer:       analyzer,
 		allowedOrigins: allowedOrigins,
+	}
+	if store != nil {
+		s.store = store
 	}
 	s.mux = s.routes()
 	return s
@@ -72,6 +79,7 @@ func (s *HTTPServer) routes() *chi.Mux {
 		r.Get("/agents", s.HandleListAgents)
 		r.Get("/agents/{id}/metrics", s.HandleAgentMetrics)
 		r.Post("/agents/{id}/analyze", s.HandleAnalyze)
+		r.Post("/agents/{id}/report", s.HandleReport)
 		r.Post("/agents/{id}/stream", s.HandleStreamData)
 		r.Post("/agents/{id}/send", s.HandleSendData)
 	})
@@ -204,11 +212,21 @@ type analyzeRequest struct {
 	BucketSeconds int         `json:"bucket_seconds"`
 	Sigma         float64     `json:"sigma"`
 	MinPoints     int         `json:"min_points"`
+	SMAPeriod     int         `json:"sma_period"`
+	EMAPeriod     int         `json:"ema_period"`
 	Pairs         [][2]string `json:"pairs"`
 }
 
 // POST /api/agents/{id}/analyze
 func (s *HTTPServer) HandleAnalyze(w http.ResponseWriter, r *http.Request) {
+	s.handleAnalysis(w, r, false)
+}
+
+func (s *HTTPServer) HandleReport(w http.ResponseWriter, r *http.Request) {
+	s.handleAnalysis(w, r, true)
+}
+
+func (s *HTTPServer) handleAnalysis(w http.ResponseWriter, r *http.Request, report bool) {
 	if s.store == nil {
 		http.Error(w, "database is disabled", http.StatusServiceUnavailable)
 		return
@@ -219,7 +237,7 @@ func (s *HTTPServer) HandleAnalyze(w http.ResponseWriter, r *http.Request) {
 	}
 
 	defer r.Body.Close()
-	payload := analyzeRequest{BucketSeconds: 60, Sigma: 3, MinPoints: 8}
+	payload := analyzeRequest{BucketSeconds: 60, Sigma: 3, MinPoints: 8, SMAPeriod: analysis.DefaultPeriod, EMAPeriod: analysis.DefaultPeriod}
 	if err := json.NewDecoder(io.LimitReader(r.Body, 1<<20)).Decode(&payload); err != nil {
 		if !errors.Is(err, io.EOF) {
 			http.Error(w, "invalid request body", http.StatusBadRequest)
@@ -244,7 +262,7 @@ func (s *HTTPServer) HandleAnalyze(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "from must be before to", http.StatusBadRequest)
 		return
 	}
-	if payload.BucketSeconds < 1 || payload.Sigma <= 0 || payload.MinPoints < 2 {
+	if payload.BucketSeconds < 1 || payload.Sigma <= 0 || payload.MinPoints < 2 || payload.SMAPeriod < 1 || payload.EMAPeriod < 1 {
 		http.Error(w, "invalid analysis options", http.StatusBadRequest)
 		return
 	}
@@ -304,16 +322,24 @@ func (s *HTTPServer) HandleAnalyze(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
-	result, err := s.analyzer.Analyze(r.Context(), analysis.Request{
+	req := analysis.Request{
 		Source: "database",
 		Points: rows,
 		Options: analysis.Options{
 			BucketSeconds: payload.BucketSeconds,
 			Sigma:         payload.Sigma,
 			MinPoints:     payload.MinPoints,
+			SMAPeriod:     payload.SMAPeriod,
+			EMAPeriod:     payload.EMAPeriod,
 			Pairs:         payload.Pairs,
 		},
-	})
+	}
+	var result []byte
+	if report {
+		result, err = s.analyzer.Report(r.Context(), req)
+	} else {
+		result, err = s.analyzer.Analyze(r.Context(), req)
+	}
 	switch {
 	case errors.Is(err, analysis.ErrInvalidRequest):
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -325,6 +351,12 @@ func (s *HTTPServer) HandleAnalyze(w http.ResponseWriter, r *http.Request) {
 	case err != nil:
 		logger.Error("analysis failed: %v", err)
 		http.Error(w, "internal server error", http.StatusInternalServerError)
+	case report:
+		w.Header().Set("Content-Type", "application/pdf")
+		w.Header().Set("Cache-Control", "no-store")
+		w.Header().Set("Content-Disposition", `attachment; filename="report.pdf"`)
+		w.Header().Set("X-Content-Type-Options", "nosniff")
+		w.Write(result)
 	default:
 		writeJSON(w, http.StatusOK, json.RawMessage(result))
 	}

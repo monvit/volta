@@ -31,6 +31,8 @@ class AnalysisOptions(BaseModel):
     sigma: float = Field(default=3.0, gt=0)
     min_points: int = Field(default=8, ge=2)
     pairs: list[tuple[str, str]] = Field(default_factory=list)
+    sma_period: int = Field(default=10, ge=1, strict=True)
+    ema_period: int = Field(default=10, ge=1, strict=True)
 
 
 class AnalysisRequest(BaseModel):
@@ -67,6 +69,18 @@ class Rollup(BaseModel):
     points: list[RollupPoint]
 
 
+class MovingAveragePoint(BaseModel):
+    timestamp_ns: int
+    sma: float | None
+    ema: float
+
+
+class MovingAverageSeries(BaseModel):
+    metric_type: str
+    device_id: str
+    points: list[MovingAveragePoint]
+
+
 class Anomaly(BaseModel):
     metric_type: str
     device_id: str
@@ -96,6 +110,7 @@ class AnalysisResult(BaseModel):
     generated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     series: list[SeriesStats] = Field(default_factory=list)
     rollups: list[Rollup] = Field(default_factory=list)
+    moving_averages: list[MovingAverageSeries] = Field(default_factory=list)
     anomalies: list[Anomaly] = Field(default_factory=list)
     correlations: list[Correlation] = Field(default_factory=list)
     regressions: list[Regression] = Field(default_factory=list)

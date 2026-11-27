@@ -67,6 +67,52 @@ func TestClientAnalyzeMapsErrors(t *testing.T) {
 	}
 }
 
+func TestClientReportPassesOptions(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/report" || r.Header.Get("Accept") != "application/pdf" {
+			t.Errorf("unexpected request: %s %s", r.URL.Path, r.Header.Get("Accept"))
+		}
+		var req Request
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			t.Fatalf("decode request: %v", err)
+		}
+		if req.Options.SMAPeriod != 5 || req.Options.EMAPeriod != 3 {
+			t.Errorf("unexpected options: %+v", req.Options)
+		}
+		w.Header().Set("Content-Type", "application/pdf")
+		_, _ = w.Write([]byte("%PDF-1.4\n%%EOF\n"))
+	}))
+	defer server.Close()
+
+	client := New(true, server.URL, time.Second, 100)
+	result, err := client.Report(context.Background(), Request{Options: Options{SMAPeriod: 5, EMAPeriod: 3}})
+	if err != nil || string(result) != "%PDF-1.4\n%%EOF\n" {
+		t.Fatalf("report: %q, %v", result, err)
+	}
+}
+
+func TestClientReportRejectsInvalidResponses(t *testing.T) {
+	for _, tc := range []struct {
+		name, contentType, body string
+	}{
+		{"wrong type", "application/json", "%PDF-1.4\n%%EOF\n"},
+		{"wrong header", "application/pdf", "not a PDF %%EOF"},
+		{"truncated", "application/pdf", "%PDF-1.4\n"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				w.Header().Set("Content-Type", tc.contentType)
+				_, _ = w.Write([]byte(tc.body))
+			}))
+			defer server.Close()
+			client := New(true, server.URL, time.Second, 100)
+			if _, err := client.Report(context.Background(), Request{}); !errors.Is(err, ErrUnavailable) {
+				t.Fatalf("got %v, want unavailable", err)
+			}
+		})
+	}
+}
+
 func TestClientAnalyzeDisabled(t *testing.T) {
 	client := New(false, "http://localhost:8000", time.Second, 100)
 

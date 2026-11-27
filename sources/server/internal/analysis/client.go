@@ -7,12 +7,13 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"mime"
 	"net/http"
 	"strings"
 	"time"
 )
 
-const maxResponseBytes = 8 << 20
+const maxResponseBytes = 32 << 20
 
 var (
 	ErrDisabled       = errors.New("analysis is disabled")
@@ -31,6 +32,8 @@ type Options struct {
 	BucketSeconds int         `json:"bucket_seconds"`
 	Sigma         float64     `json:"sigma"`
 	MinPoints     int         `json:"min_points"`
+	SMAPeriod     int         `json:"sma_period"`
+	EMAPeriod     int         `json:"ema_period"`
 	Pairs         [][2]string `json:"pairs"`
 }
 
@@ -68,8 +71,28 @@ func (c *Client) MaxRows() int {
 }
 
 func (c *Client) Analyze(ctx context.Context, req Request) (json.RawMessage, error) {
+	return c.post(ctx, "/analyze", "application/json", req)
+}
+
+func (c *Client) Report(ctx context.Context, req Request) ([]byte, error) {
+	return c.post(ctx, "/report", "application/pdf", req)
+}
+
+const DefaultPeriod = 10
+
+func (c *Client) post(ctx context.Context, path, accept string, req Request) ([]byte, error) {
 	if !c.Enabled() {
 		return nil, ErrDisabled
+	}
+
+	if req.Options.SMAPeriod == 0 {
+		req.Options.SMAPeriod = DefaultPeriod
+	}
+	if req.Options.EMAPeriod == 0 {
+		req.Options.EMAPeriod = DefaultPeriod
+	}
+	if req.Options.SMAPeriod < 1 || req.Options.EMAPeriod < 1 {
+		return nil, ErrInvalidRequest
 	}
 
 	body, err := json.Marshal(req)
@@ -77,12 +100,12 @@ func (c *Client) Analyze(ctx context.Context, req Request) (json.RawMessage, err
 		return nil, fmt.Errorf("analysis: marshal request: %w", err)
 	}
 
-	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, c.url+"/analyze", bytes.NewReader(body))
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, c.url+path, bytes.NewReader(body))
 	if err != nil {
 		return nil, fmt.Errorf("analysis: create request: %w", err)
 	}
 	httpReq.Header.Set("Content-Type", "application/json")
-	httpReq.Header.Set("Accept", "application/json")
+	httpReq.Header.Set("Accept", accept)
 
 	resp, err := c.client.Do(httpReq)
 	if err != nil {
@@ -90,17 +113,26 @@ func (c *Client) Analyze(ctx context.Context, req Request) (json.RawMessage, err
 	}
 	defer resp.Body.Close()
 
-	data, err := io.ReadAll(io.LimitReader(resp.Body, maxResponseBytes))
+	data, err := io.ReadAll(io.LimitReader(resp.Body, maxResponseBytes+1))
 	if err != nil {
 		return nil, fmt.Errorf("%w: read response: %v", ErrUnavailable, err)
 	}
 
+	if len(data) > maxResponseBytes {
+		return nil, fmt.Errorf("%w: response exceeds size limit", ErrUnavailable)
+	}
+
 	switch {
 	case resp.StatusCode >= 200 && resp.StatusCode < 300:
-		if !json.Valid(data) {
+		if accept == "application/pdf" {
+			mediaType, _, err := mime.ParseMediaType(resp.Header.Get("Content-Type"))
+			if err != nil || mediaType != accept || !bytes.HasPrefix(data, []byte("%PDF-")) || !bytes.HasSuffix(bytes.TrimRight(data, "\x00\t\n\f\r "), []byte("%%EOF")) {
+				return nil, fmt.Errorf("%w: invalid PDF response", ErrUnavailable)
+			}
+		} else if !json.Valid(data) {
 			return nil, fmt.Errorf("%w: invalid JSON response", ErrUnavailable)
 		}
-		return json.RawMessage(data), nil
+		return data, nil
 	case resp.StatusCode >= 400 && resp.StatusCode < 500:
 		return nil, fmt.Errorf("%w: %s", ErrInvalidRequest, strings.TrimSpace(string(data)))
 	default:

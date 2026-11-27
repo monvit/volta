@@ -16,6 +16,7 @@ W zakresie projektu mieści się zaprojektowanie i implementacja następujących
   - [Lokalny](#model-lokalny)
   - [Zdalny](#model-zdalny)
 - Wysokowydajny transport danych między agentem a serwerem, zoptymalizowany pod kątem niskiego narzutu i oszczędności energii **gRPC**.
+- Analiza metryk (statystyki, agregacja, anomalie, korelacje i regresja) z tym samym rdzeniem logicznym dostępnym lokalnie przez CLI i zdalnie przez serwer.
 - Wizualizacja w czasie rzeczywistym **WebSockets**.
 - Pierwotnie narzędzie dedykowane na system `GNU Linux`
 - Konfigurowalność agenta, w tym:
@@ -75,7 +76,14 @@ Jego zadaniem jest cykliczne odpytywanie niskopoziomowych API sprzętowych (jak 
 
 Centralny punkt do zbierania i agregacji danych całej platformy. Jest odpowiedzialny za odbieranie strumieni danych od wszystkich podłączonych agentów.
 
-W trybie zdalnym zapisuje dane w bazie danych i dodatkowo sam aktywnie monitoruje hosty (odpytując ich **BMC** o całkowity pobór mocy). Wystawia też dwa rodzaje API dla dashboardu: **WebSockets** (do rozgłaszania danych na żywo) oraz **REST / gRPC-Web** (do odpytywania o dane historyczne).
+W trybie zdalnym zapisuje dane w bazie danych i dodatkowo sam aktywnie monitoruje hosty (odpytując ich **BMC** o całkowity pobór mocy). Wystawia też dwa rodzaje API dla dashboardu: **WebSockets** (do rozgłaszania danych na żywo) oraz **REST / gRPC-Web** (do odpytywania o dane historyczne). Żądania analizy z dashboardu przyjmuje jako `POST /api/agents/{id}/analyze`, pobiera dane z bazy i przekazuje je do komponentu Analysis.
+
+### Analiza
+
+Komponent odpowiedzialny za obliczenia na metrykach. Rdzeń jest napisany w Pythonie i nie zna źródła danych — przyjmuje znormalizowane szeregi czasowe i zwraca jeden schemat wyników (Pydantic/JSON). Dwa cienkie adaptery udostępniają go w dwóch trybach:
+
+- **Lokalnie** — CLI `volta-analyze` czyta pliki `dump_*.csv` zapisane przez agenta.
+- **Zdalnie** — sidecar HTTP (FastAPI) w kontenerze analizuje dane pobrane przez serwer z TimescaleDB. Dashboard nie komunikuje się z nim bezpośrednio; serwer Go pełni rolę proxy i zwraca wynik bez przepisywania schematu.
 
 ### Baza Danych
 

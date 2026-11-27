@@ -47,20 +47,48 @@ export async function runAnalysis(
   request: AnalysisRequestPayload,
   signal?: AbortSignal,
 ) {
-  const url = apiUrl(baseUrl, `/api/agents/${encodeURIComponent(agentId)}/analyze`);
+  const res = await postAnalysis(baseUrl, agentId, request, "analyze", signal);
+  return (await res.json()) as AnalysisResult;
+}
+
+export async function fetchAnalysisReport(
+  baseUrl: string,
+  agentId: string,
+  request: AnalysisRequestPayload,
+  signal?: AbortSignal,
+) {
+  const res = await postAnalysis(baseUrl, agentId, request, "report", signal);
+  if (res.headers.get("content-type")?.split(";")[0]?.trim().toLowerCase() !== "application/pdf") {
+    throw new Error("Server did not return a PDF report");
+  }
+  return res.blob();
+}
+
+async function postAnalysis(
+  baseUrl: string,
+  agentId: string,
+  request: AnalysisRequestPayload,
+  endpoint: "analyze" | "report",
+  signal?: AbortSignal,
+) {
+  const url = apiUrl(baseUrl, `/api/agents/${encodeURIComponent(agentId)}/${endpoint}`);
   const res = await fetch(url, {
     method: "POST",
-    headers: { "Content-Type": "application/json", Accept: "application/json" },
+    headers: {
+      "Content-Type": "application/json",
+      Accept: endpoint === "report" ? "application/pdf" : "application/json",
+    },
     body: JSON.stringify(request),
     signal,
   });
 
   if (!res.ok) {
     const detail = (await res.text()).trim();
-    throw new Error(detail || `Analysis failed (${res.status})`);
+    const operation = endpoint === "report" ? "PDF download" : "Analysis";
+    throw new Error(detail || `${operation} failed (${res.status})`);
   }
 
-  return (await res.json()) as AnalysisResult;
+  return res;
 }
 
 /** Ask an agent to begin streaming.

@@ -6,9 +6,12 @@ import argparse
 import sys
 from pathlib import Path
 
+from pydantic import ValidationError
+
 from volta_analysis.analysis import run
 from volta_analysis.metric_io import parse_csv
 from volta_analysis.model import AnalysisOptions, AnalysisRequest, AnalysisResult, Point, series_key
+from volta_analysis.report import render_pdf
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -27,6 +30,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--bucket-seconds", type=int, default=60)
     parser.add_argument("--sigma", type=float, default=3.0)
     parser.add_argument("--min-points", type=int, default=8)
+    parser.add_argument("--sma-period", type=int, default=10, help="SMA window in samples")
+    parser.add_argument("--ema-period", type=int, default=10, help="EMA span in samples")
     parser.add_argument(
         "--pair",
         action="append",
@@ -34,7 +39,9 @@ def build_parser() -> argparse.ArgumentParser:
         metavar="SERIES,SERIES",
         help="correlate two series given as METRIC_TYPE@DEVICE (repeatable)",
     )
-    parser.add_argument("--json", action="store_true", help="emit the full result as JSON")
+    output_format = parser.add_mutually_exclusive_group()
+    output_format.add_argument("--json", action="store_true", help="emit the full result as JSON")
+    output_format.add_argument("--pdf", action="store_true", help="emit a PDF report")
     parser.add_argument("--output", type=Path, help="write the output to a file instead of stdout")
     return parser
 
@@ -52,7 +59,15 @@ def main(argv: list[str] | None = None) -> int:
 
     try:
         pairs = [parse_pair(value) for value in args.pair]
-    except argparse.ArgumentTypeError as exc:
+        options = AnalysisOptions(
+            bucket_seconds=args.bucket_seconds,
+            sigma=args.sigma,
+            min_points=args.min_points,
+            pairs=pairs,
+            sma_period=args.sma_period,
+            ema_period=args.ema_period,
+        )
+    except (argparse.ArgumentTypeError, ValidationError) as exc:
         parser.error(str(exc))
         return 2
 
@@ -65,15 +80,20 @@ def main(argv: list[str] | None = None) -> int:
     selected: list[Point] = [
         point for point in points if not args.metric or point.metric_type in args.metric
     ]
-    options = AnalysisOptions(
-        bucket_seconds=args.bucket_seconds,
-        sigma=args.sigma,
-        min_points=args.min_points,
-        pairs=pairs,
-    )
     result = run(AnalysisRequest(source="csv", points=selected, options=options))
-    result.warnings.extend(warnings)
+    if args.pdf:
+        result.warnings.extend(
+            warning.split(" (", 1)[0] if ": skipped malformed row (" in warning else warning
+            for warning in warnings
+        )
+        pdf = render_pdf(result, options)
+        if args.output:
+            args.output.write_bytes(pdf)
+        else:
+            sys.stdout.buffer.write(pdf)
+        return 0
 
+    result.warnings.extend(warnings)
     text = result.model_dump_json(indent=2) if args.json else format_result(result)
     if args.output:
         args.output.write_text(text + "\n", encoding="utf-8")
@@ -90,6 +110,17 @@ def format_result(result: AnalysisResult) -> str:
             f"n={stats.count} last={stats.last:.4g} min={stats.min:.4g} "
             f"max={stats.max:.4g} mean={stats.mean:.4g} stddev={stats.stddev:.4g}"
         )
+
+    if result.moving_averages:
+        lines.extend(["", "moving averages (latest):"])
+        for item in result.moving_averages:
+            if not item.points:
+                continue
+            latest = item.points[-1]
+            sma = "n/a" if latest.sma is None else f"{latest.sma:.4g}"
+            lines.append(
+                f"  {series_key(item.metric_type, item.device_id)}: SMA={sma} EMA={latest.ema:.4g}"
+            )
 
     if result.correlations:
         lines.extend(["", "correlations:"])
